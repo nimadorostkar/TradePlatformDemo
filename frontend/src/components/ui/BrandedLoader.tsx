@@ -1,4 +1,5 @@
 import { useBrand } from '@/app/providers/brand-provider';
+import { BrandLogo } from './BrandLogo';
 import { cn } from './cn';
 
 /**
@@ -14,7 +15,6 @@ import { cn } from './cn';
  */
 export function BrandedLoader({ label, className }: { label?: string; className?: string }) {
   const brand = useBrand();
-  const mark = brand.compactLogoUrl ?? brand.logoUrl;
 
   return (
     <div
@@ -38,19 +38,10 @@ export function BrandedLoader({ label, className }: { label?: string; className?
           className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-[var(--brand-primary)]"
           style={{ animationDuration: '900ms' }}
         />
-        {mark ? (
-          <img
-            src={mark}
-            alt=""
-            aria-hidden
-            className="h-8 w-8 animate-pulse object-contain"
-            onError={(event) => {
-              // A missing brand asset must not leave a broken-image glyph
-              // sitting in the middle of the loading screen.
-              event.currentTarget.style.display = 'none';
-            }}
-          />
-        ) : null}
+        {/* The square monogram; BrandLogo hides itself if the asset is
+            missing so no broken-image glyph sits in the middle of the
+            loading screen. */}
+        <BrandLogo variant="mark" aria-hidden className="h-8 w-8 animate-pulse object-contain" />
       </div>
 
       <p className="text-xs text-text-secondary">{label ?? `Loading ${brand.platformName}…`}</p>

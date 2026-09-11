@@ -129,6 +129,13 @@ feature works.
 
 ## Branding
 
+The built-in identity is **FirstFX**: the assets in `public/brand/` (extracted
+from the brand's vector artwork) are the wordmark + "SET TO GO" lockup on the
+sign-in screen, the bare wordmark in the header, the F monogram in the loader
+and a blue tile as the favicon. Each mark ships in a white-on-dark and a
+navy-on-light colourway; `BrandLogo` picks one from `<html data-theme>`, so a
+theme switch re-colours the logo without a reload.
+
 One build serves multiple brokers. Set `VITE_BRAND_CONFIG_URL` to a JSON
 document validated by `src/app/config/brand.ts`:
 
@@ -136,7 +143,11 @@ document validated by `src/app/config/brand.ts`:
 {
   "brokerName": "Example Broker",
   "platformName": "Example Terminal",
-  "logoUrl": "https://cdn.example.com/logo.svg",
+  "logoUrl": "https://cdn.example.com/logo-on-dark.svg",
+  "logoUrlOnLight": "https://cdn.example.com/logo.svg",
+  "compactLogoUrl": "https://cdn.example.com/wordmark-on-dark.svg",
+  "markUrl": "https://cdn.example.com/mark-on-dark.svg",
+  "faviconUrl": "https://cdn.example.com/icon.svg",
   "primaryColor": "#3772ff",
   "secondaryColor": "#6c8cff",
   "legalLinks": [{ "label": "Terms", "href": "https://example.com/terms" }],
@@ -144,9 +155,13 @@ document validated by `src/app/config/brand.ts`:
 }
 ```
 
-Invalid or unreachable configuration falls back to neutral defaults and records
-why in System Messages. Feature components reference semantic CSS variables
-only — never a literal brand colour.
+`logoUrl` is the only required asset; `compactLogoUrl` (header) and `markUrl`
+(square, loader) fall back to it, and every `…OnLight` variant falls back to
+its dark counterpart.
+
+Invalid or unreachable configuration falls back to the built-in identity and
+records why in System Messages. Feature components reference semantic CSS
+variables only — never a literal brand colour.
 
 ---
 

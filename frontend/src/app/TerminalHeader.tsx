@@ -11,6 +11,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { cn } from '@/components/ui/cn';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Badge, Button, Money, Unavailable } from '@/components/ui/primitives';
 import { useBrand } from '@/app/providers/brand-provider';
 import { CreateAccountButton } from '@/features/auth/CreateAccountButton';
@@ -94,6 +95,7 @@ export function TerminalHeader({ onOpenCommandPalette }: { onOpenCommandPalette:
   const unreadErrors = useSystemMessages((s) => s.unreadErrorCount);
   const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
   const [panelsMenuOpen, setPanelsMenuOpen] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   // True while an account switch's token renewal is in flight; the selector is
   // disabled so a second switch cannot race the first.
   const [switching, setSwitching] = useState(false);
@@ -141,25 +143,21 @@ export function TerminalHeader({ onOpenCommandPalette }: { onOpenCommandPalette:
         </button>
       )}
       <div className="flex shrink-0 items-center gap-2">
-        {brand.logoUrl ? (
-          <img
-            src={brand.compactLogoUrl ?? brand.logoUrl}
-            alt={brand.brokerName}
-            className="h-5 w-auto"
-            onError={(event) => {
-              // A broken brand asset must not leave a broken-image icon in the
-              // header; fall back to the text name.
-              event.currentTarget.style.display = 'none';
-            }}
-          />
-        ) : null}
+        {/* The compact wordmark; a broken asset falls back to the text name. */}
+        <BrandLogo variant="compact" className="h-5 w-auto" onFail={() => setLogoFailed(true)} />
         {/* The document's h1 (MED-12): heading structure used to start at the
             widgets' h3s, leaving a screen reader with no page-level anchor.
             Visually identical to the span it replaces. */}
         {/* Visually dropped below lg — the ~80px it takes is what pushed the
             LIVE badge and the session controls off a 390px screen — but kept
-            as the document h1 for screen readers (MED-12). */}
-        <h1 className="text-xs font-semibold tracking-tight max-lg:sr-only">
+            as the document h1 for screen readers (MED-12). The wordmark already
+            spells the name, so the text only shows when the logo could not. */}
+        <h1
+          className={cn(
+            'text-xs font-semibold tracking-tight max-lg:sr-only',
+            !logoFailed && 'sr-only',
+          )}
+        >
           {brand.platformName}
         </h1>
       </div>

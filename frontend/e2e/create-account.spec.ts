@@ -31,7 +31,7 @@ async function installBrokerBrand(page: Page): Promise<void> {
       json: {
         brokerName: 'Broker',
         platformName: 'Broker Terminal',
-        logoUrl: '/brand/tradeplatform-logo.svg',
+        logoUrl: '/brand/firstfx-lockup-on-dark.svg',
         primaryColor: '#3366ee',
         secondaryColor: '#6c8cff',
         createAccountUrl: CREATE_ACCOUNT_URL,

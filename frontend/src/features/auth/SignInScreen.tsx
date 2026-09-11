@@ -1,5 +1,7 @@
 import { useCallback, useState, type FormEvent } from 'react';
 import { Button, Field, Input } from '@/components/ui/primitives';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { cn } from '@/components/ui/cn';
 import { useBrand } from '@/app/providers/brand-provider';
 import { useServices } from '@/app/providers/services';
 import { TradingError } from '@/domain/common/errors';
@@ -32,6 +34,7 @@ export function SignInScreen() {
   // Off by default (MED-02): a 30-day session is an opt-in, not a surprise.
   const [remember, setRemember] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onSubmit = useCallback(
@@ -66,17 +69,17 @@ export function SignInScreen() {
     <div className="flex h-full items-center justify-center bg-[var(--background-primary)] p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          {brand.logoUrl && (
-            <img
-              src={brand.logoUrl}
-              alt={brand.brokerName}
-              className="mx-auto mb-3 h-8 w-auto"
-              onError={(event) => {
-                event.currentTarget.style.display = 'none';
-              }}
-            />
-          )}
-          <h1 className="text-lg font-semibold">{brand.platformName}</h1>
+          {/* The full lockup (wordmark + tagline). It already spells the
+              platform name, so the heading is only shown when the asset
+              could not load. */}
+          <BrandLogo
+            variant="full"
+            className="mx-auto mb-3 h-11 w-auto"
+            onFail={() => setLogoFailed(true)}
+          />
+          <h1 className={cn('text-lg font-semibold', !logoFailed && 'sr-only')}>
+            {brand.platformName}
+          </h1>
           <p className="mt-1 text-xs text-text-muted">
             {mode === 'register'
               ? `Create your ${brand.brokerName} demo account`

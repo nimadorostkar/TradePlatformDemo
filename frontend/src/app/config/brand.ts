@@ -6,7 +6,7 @@ import { z } from 'zod';
  * The same build serves multiple brokers/environments: branding is fetched
  * from `VITE_BRAND_CONFIG_URL` at startup and validated before any of it
  * touches the DOM. If the fetch or validation fails we fall back to the safe
- * built-in TradePlatform identity rather than rendering a half-branded terminal.
+ * built-in FirstFX identity rather than rendering a half-branded terminal.
  */
 
 /** Only http(s) links are accepted; `javascript:` and `data:` are rejected. */
@@ -26,8 +26,20 @@ const hexColor = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'must 
 export const brandConfigSchema = z.object({
   brokerName: z.string().min(1).max(80),
   platformName: z.string().min(1).max(80),
+  /**
+   * Logo lockups. `logoUrl` is the full-size mark for the sign-in screen,
+   * `compactLogoUrl` the one that fits a 20px header row and `markUrl` a
+   * square monogram for the loader. Each is drawn for the DARK theme (the
+   * default); the matching `…OnLight` variant is swapped in when the terminal
+   * is on the light theme, so a white wordmark never lands on a white page.
+   * A brand that ships one universal asset simply omits the light variants.
+   */
   logoUrl: assetRef,
+  logoUrlOnLight: assetRef.optional(),
   compactLogoUrl: assetRef.optional(),
+  compactLogoUrlOnLight: assetRef.optional(),
+  markUrl: assetRef.optional(),
+  markUrlOnLight: assetRef.optional(),
   faviconUrl: assetRef.optional(),
   primaryColor: hexColor,
   secondaryColor: hexColor,
@@ -59,11 +71,18 @@ export type BrandConfig = z.infer<typeof brandConfigSchema>;
  * Production fallback used when no runtime brand document is configured.
  */
 export const DEFAULT_BRAND: BrandConfig = {
-  brokerName: 'TradePlatform',
-  platformName: 'TradePlatform',
-  logoUrl: '/brand/tradeplatform-logo.svg',
-  compactLogoUrl: '/brand/tradeplatform-logo.svg',
-  faviconUrl: '/brand/tradeplatform-logo.svg',
+  brokerName: 'FirstFX',
+  platformName: 'FirstFX',
+  // The FirstFX identity (public/brand/): wordmark + "SET TO GO" tagline on
+  // the sign-in screen, the bare wordmark in the header, the F monogram in
+  // the loader and a blue tile for the favicon (legible on any tab colour).
+  logoUrl: '/brand/firstfx-lockup-on-dark.svg',
+  logoUrlOnLight: '/brand/firstfx-lockup.svg',
+  compactLogoUrl: '/brand/firstfx-wordmark-on-dark.svg',
+  compactLogoUrlOnLight: '/brand/firstfx-wordmark.svg',
+  markUrl: '/brand/firstfx-mark-on-dark.svg',
+  markUrlOnLight: '/brand/firstfx-mark.svg',
+  faviconUrl: '/brand/firstfx-icon.svg',
   // #3366ee, not the old #3772ff: white button text on this colour measures
   // 4.91:1 where the old value sat at 4.19:1, below WCAG AA on the primary
   // call to action in both themes (HGH-04). Matches the token default.
@@ -131,4 +150,25 @@ export function applyBrandToDocument(brand: BrandConfig, doc: Document = documen
     if (!link.parentNode) doc.head.appendChild(link);
   }
   doc.title = brand.platformName;
+}
+
+export type BrandLogoVariant = 'full' | 'compact' | 'mark';
+
+/**
+ * The asset to draw for a logo slot on the given theme, falling back down the
+ * ladder (mark → compact → full) so a brand that ships fewer files still shows
+ * SOMETHING in every slot rather than a broken image.
+ */
+export function brandLogoUrl(
+  brand: BrandConfig,
+  variant: BrandLogoVariant,
+  theme: 'dark' | 'light',
+): string {
+  const light = theme === 'light';
+  const pick = (dark: string | undefined, onLight: string | undefined) =>
+    light ? (onLight ?? dark) : dark;
+  const full = pick(brand.logoUrl, brand.logoUrlOnLight) ?? brand.logoUrl;
+  const compact = pick(brand.compactLogoUrl, brand.compactLogoUrlOnLight) ?? full;
+  const mark = pick(brand.markUrl, brand.markUrlOnLight) ?? compact;
+  return variant === 'mark' ? mark : variant === 'compact' ? compact : full;
 }
