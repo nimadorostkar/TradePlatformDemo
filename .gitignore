@@ -25,3 +25,7 @@ deploy/frontend-build/
 deploy/gateway.env
 deploy/frontend.env
 deploy/.env
+
+# `go build ./cmd/...` output when run from backend/
+backend/demomarket
+backend/gateway
