@@ -31,8 +31,8 @@ type HandlerConfig struct {
 }
 
 const (
-	wsApplicationProtocol = "opotrade.v1"
-	wsJWTProtocolPrefix   = "opotrade.jwt."
+	wsApplicationProtocol = "tradeplatform.v1"
+	wsJWTProtocolPrefix   = "tradeplatform.jwt."
 )
 
 // Handler is the /ws HTTP handler.
@@ -151,7 +151,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // authenticate checks the JWT from the Authorization header, the browser-safe
 // WebSocket subprotocol transport, or (when explicitly enabled for migration)
-// an access_token query parameter. The server negotiates only opotrade.v1 and
+// an access_token query parameter. The server negotiates only tradeplatform.v1 and
 // never echoes the credential-bearing protocol.
 func (h *Handler) authenticate(r *http.Request) (*auth.Claims, bool) {
 	if h.validator == nil {
@@ -179,7 +179,7 @@ func (h *Handler) authenticate(r *http.Request) (*auth.Claims, bool) {
 }
 
 // websocketProtocolToken reads a single credential protocol of the form
-// opotrade.jwt.<JWT>. JWT compact serialization uses only RFC token-safe
+// tradeplatform.jwt.<JWT>. JWT compact serialization uses only RFC token-safe
 // characters, so it is valid in Sec-WebSocket-Protocol. Ambiguous duplicate
 // credentials fail closed.
 func websocketProtocolToken(r *http.Request) (token string, present bool) {

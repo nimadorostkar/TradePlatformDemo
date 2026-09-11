@@ -1,11 +1,11 @@
-# OpoMTSocket — Deep Analysis (Phase 1)
+# LegacyMTSocket — Deep Analysis (Phase 1)
 
-**Purpose:** A faithful, behavior-level reconstruction of the existing .NET 8 gateway (`OpoMTSocket`) that will be re-implemented in Go. This document is the source of truth for *what the system does today*. The Go port must preserve every externally observable behavior described here (routes, payloads, status codes, WS contract) unless a deviation is explicitly approved in `ARCHITECTURE.md`.
+**Purpose:** A faithful, behavior-level reconstruction of the existing .NET 8 gateway (`LegacyMTSocket`) that will be re-implemented in Go. This document is the source of truth for *what the system does today*. The Go port must preserve every externally observable behavior described here (routes, payloads, status codes, WS contract) unless a deviation is explicitly approved in `ARCHITECTURE.md`.
 
 **Inputs analyzed (read-only):**
-- `/Users/nima/Projects/opotrade-mt-socket` — the live .NET 8 gateway (behavior source of truth)
-- `/Users/nima/Projects/opotrade-review-main` — review/analysis of the old gateway
-- `/Users/nima/Projects/OpoTrade-Issues-NewArchitectural-main` — guidance for the new architecture
+- `/Users/nima/Projects/tradeplatform-mt-socket` — the live .NET 8 gateway (behavior source of truth)
+- `/Users/nima/Projects/tradeplatform-review-main` — review/analysis of the old gateway
+- `/Users/nima/Projects/TradePlatform-Issues-NewArchitectural-main` — guidance for the new architecture
 
 > **Convention used in this doc:** “LIVE” = compiled and reachable at runtime. “DEAD” = present in source but excluded from compilation, commented out of DI/pipeline, or never invoked. Preserving LIVE behavior is mandatory; DEAD code is documented for completeness but **must not** be reproduced as functionality.
 
@@ -13,9 +13,9 @@
 
 ## 1. Executive Summary
 
-OpoMTSocket is a **stateful reverse-proxy / API gateway** that sits between client apps (web frontends, a TradingView charting UI, a `ClientWS` console app) and the **MetaTrader 5 Manager Web API** at `https://tradeapp.opofinance.com:443`. It:
+LegacyMTSocket is a **stateful reverse-proxy / API gateway** that sits between client apps (web frontends, a TradingView charting UI, a `ClientWS` console app) and the **MetaTrader 5 Manager Web API** at `https://mt5.example.com:443`. It:
 
-1. Authenticates clients with its **own JWT** (issued from an OpoFinance CRM login, or — in the live fallback path — from just a username with no password check).
+1. Authenticates clients with its **own JWT** (issued from an TradePlatform CRM login, or — in the live fallback path — from just a username with no password check).
 2. Authenticates **once** to the MT5 Manager Web API using a manager login (`7898`) via an HTTP challenge/response handshake, and keeps that session alive on a **single pinned keep-alive connection** guarded by a background ping loop.
 3. Exposes ~60 **REST endpoints** that translate 1:1 to MT5 Web API calls (`/api/order/get`, `/api/tick/last`, …), optionally reshaping MT5 JSON into **TradingView (“TV”) payloads** when `source=tv`.
 4. Exposes a single raw **WebSocket** endpoint `/ws` that re-polls MT5 every 3 seconds and pushes the serialized result to the client. The “subscription” is encoded entirely in the connect URL query string; there is no message protocol.
@@ -35,7 +35,7 @@ client → [JWT auth] → Controller → I<Domain>Service → AuthenticateServic
 2. Client calls e.g. `GET /api/Order/get_page?login=...&offset=0&total=50&source=tv` with `Authorization: Bearer <jwt>`.
 3. JWT bearer middleware validates the signature + lifetime (issuer/audience **not** validated). `[Authorize]` passes; `[AccountsAuthorize]` (on a few endpoints) checks the `login` arg is in the token’s `accounts` claim.
 4. The controller calls the domain service, which formats an `APIUrl.*` template into a path and calls `AuthenticateServices.GlobalMT5RequestProcess(url)`.
-5. `AuthenticateServices` issues the GET through the singleton `MT5HttpClient` (which prepends `https://tradeapp.opofinance.com:443`), riding the already-authenticated keep-alive connection + cookie.
+5. `AuthenticateServices` issues the GET through the singleton `MT5HttpClient` (which prepends `https://mt5.example.com:443`), riding the already-authenticated keep-alive connection + cookie.
 6. On HTTP 200 + non-empty body → `GlobalResponse{ success=true, data=<raw JSON or transformed TV object> }`; otherwise `success=false`. Success/failure also feeds the auth manager’s consecutive-failure counter (re-auth after 3 failures).
 7. Controller returns `Ok(globalResponse)` (HTTP 200) on `success`, else `BadRequest(globalResponse)` (HTTP 400).
 
@@ -51,10 +51,10 @@ client → [JWT auth] → Controller → I<Domain>Service → AuthenticateServic
 
 | Project | Role | Notes |
 |---|---|---|
-| `OpoMTSocket` | ASP.NET Core 8 web host | `Program.cs` (god file: DI + middleware + `/ws` handler + Hangfire bootstrap + MT5 auth bootstrap), controllers, middleware, attributes, (dead) SignalR hub |
-| `OpoMTSocket.Core` | Contracts + DTOs | Interfaces, MT5 + TV models, `APIUrl` (upstream paths), `AppConstants`, `GlobalResponse`, `JwtTokenHelper`, enums, mapping helpers |
-| `OpoMTSocket.InfraService` | Implementation | Domain services, `AuthenticateServices`, `MT5HttpClient`, `MT5AuthenticationManager`, EF Core `PriceHistoryContext` + migrations, Hangfire `PriceHistoryJob`, **DEAD** native MT5 binary protocol stack (`Services/Common/Protocol/*`) |
-| `Opo.WebSocket.Client` | .NET console test client (`ClientWS`) | Demonstrates the `/ws` query-string contract; points at `ws://opotrade.azurewebsites.net/ws` by default |
+| `LegacyMTSocket` | ASP.NET Core 8 web host | `Program.cs` (god file: DI + middleware + `/ws` handler + Hangfire bootstrap + MT5 auth bootstrap), controllers, middleware, attributes, (dead) SignalR hub |
+| `LegacyMTSocket.Core` | Contracts + DTOs | Interfaces, MT5 + TV models, `APIUrl` (upstream paths), `AppConstants`, `GlobalResponse`, `JwtTokenHelper`, enums, mapping helpers |
+| `LegacyMTSocket.InfraService` | Implementation | Domain services, `AuthenticateServices`, `MT5HttpClient`, `MT5AuthenticationManager`, EF Core `PriceHistoryContext` + migrations, Hangfire `PriceHistoryJob`, **DEAD** native MT5 binary protocol stack (`Services/Common/Protocol/*`) |
+| `Opo.WebSocket.Client` | .NET console test client (`ClientWS`) | Demonstrates the `/ws` query-string contract; points at `ws://tradeplatform.azurewebsites.net/ws` by default |
 
 Targets `net8.0`, `Nullable` + `ImplicitUsings` enabled. JSON via **Newtonsoft.Json 13.0.3** (System.Text.Json not used).
 
@@ -64,7 +64,7 @@ Targets `net8.0`, `Nullable` + `ImplicitUsings` enabled. JSON via **Newtonsoft.J
 
 **Routing:** controllers use `[Route("api/[controller]")]` (TV controller uses `api/tv/[controller]`). Actions return `Task<IActionResult>`; the universal pattern is `return Ok(resp)` when `resp.success`, else `return BadRequest(resp)` → **200 / 400**. `[Authorize]` = JWT required; `[AccountsAuthorize]` = per-account filter (see §5). `source` defaults to `AppConstants.mt5` (`"mt5"`); pass `source=tv` for TradingView shapes. Several optional query params default to constants: `source=mt5`, `resolution=1D` (`AppConstants.resolution`), `data` default `"dhloc"`.
 
-> **DEAD controllers — NOT live** (excluded via `<Compile Remove>` in `OpoMTSocket.csproj`): `LoginController` (`POST /api/Login/CRM_login`), `TestMT5Controller` (`/api/v1/TestMT5/*`), `WeatherForecastController` (`GET /WeatherForecast`). Do not port as endpoints.
+> **DEAD controllers — NOT live** (excluded via `<Compile Remove>` in `LegacyMTSocket.csproj`): `LoginController` (`POST /api/Login/CRM_login`), `TestMT5Controller` (`/api/v1/TestMT5/*`), `WeatherForecastController` (`GET /WeatherForecast`). Do not port as endpoints.
 
 ### 3.1 AuthenticationController — `api/Authentication` — **anonymous**
 | Verb | Path | Body | Response | Codes |
@@ -266,7 +266,7 @@ Reads `login` from form/query and `accounts` from `context.User`; if both presen
 `Hub/TestTick : Hub<ITestTick>` with `GetData(string symbol, int id)` exists, but there is **no `AddSignalR()`** and **no `MapHub<>()`** — unreachable. SignalR package referenced but unused. Do not port.
 
 ### 6.3 Reference client (`Opo.WebSocket.Client/ClientWS`)
-Connects with `ClientWebSocket` to `ws://opotrade.azurewebsites.net/ws?...` (or `ws://localhost:5063/ws?...`), sets a `Sec-WebSocket-Protocol` header, then only receives and prints. Implements TP 1/2/3 (not TP=4).
+Connects with `ClientWebSocket` to `ws://tradeplatform.azurewebsites.net/ws?...` (or `ws://localhost:5063/ws?...`), sets a `Sec-WebSocket-Protocol` header, then only receives and prints. Implements TP 1/2/3 (not TP=4).
 
 ---
 
@@ -275,9 +275,9 @@ Connects with `ClientWebSocket` to `ws://opotrade.azurewebsites.net/ws?...` (or 
 The gateway talks to MT5 over the **HTTP-based MT5 Manager Web API**, *not* the native binary protocol (which is DEAD — see §8).
 
 ### 7.1 Upstream base + URL construction
-- Base = `$"{MT5Config.HostUrl}:{MT5Config.Port}"` = `https://tradeapp.opofinance.com:443`.
+- Base = `$"{MT5Config.HostUrl}:{MT5Config.Port}"` = `https://mt5.example.com:443`.
 - All upstream paths are `string.Format` templates centralized in `Core/Helpers/APIUrl.cs` (the canonical list, §7.5).
-- **Suspicious inconsistency:** the named `HttpClient "MT5HttpClient"` is registered with `BaseAddress = https://opotrade.azurewebsites.net`, but `MT5HttpClient` **always prepends its own `HostUrl`** to every path, so the named `BaseAddress` is effectively dead. (Flagged §13 ambiguity #1.)
+- **Suspicious inconsistency:** the named `HttpClient "MT5HttpClient"` is registered with `BaseAddress = https://tradeplatform.azurewebsites.net`, but `MT5HttpClient` **always prepends its own `HostUrl`** to every path, so the named `BaseAddress` is effectively dead. (Flagged §13 ambiguity #1.)
 
 ### 7.2 MT5 session auth (HTTP challenge/response)
 `MT5AuthenticationManager` (**singleton**, bootstrapped at startup):
@@ -396,7 +396,7 @@ When `source=tv`, services reshape MT5 JSON into TV models. Key mappings (must b
 - **Order/History → `TVOrderHistory`:** `side = Type % 2 == 0 ? 1 : -1`; `type = MappingHelper.mT5ToTVTypeMapping(Type)` ({0,1→2 Market; 2,3→1 Limit; 4,5→3 Stop; 6,7→4 StopLimit}); `status = mT5TVStatusMapping(State)` (STARTED→Placing, PLACED→Working, CANCELED→Canceled, PARTIAL→Working, FILLED→Filled, REJECTED→Rejected, EXPIRED→Canceled); `qty=VolumeInitial; limitPrice=stopPrice=PriceOrder; stopLoss=PriceSL; takeProfit=PriceTP; filledQty=VolumeCurrent; id=Order; timeSetup=updateTime=TimeSetup`.
 - **Position → `TVPositionResponse`:** `Id=Position; profit=Profit; qty=Volume; side=Action%2==0?1:-1; last=PriceCurrent; price=PriceOpen; type=0` (+ `timeCreate, priceSL, priceTP` in page variant).
 - **Tick → `Quote`:** `symbolname=Symbol; status="Ok"; bid=Bid; ask=Ask; lastprice=Last>0?Last:Bid; volume=Volume`.
-- **Symbol → `TVSymbolResponse`:** `type = TypeConverter.pathtotypeConveter(Path)` (split `Path` on `\`, take index 1); `session = TradingSessionConverter.ConvertMt5ToTv(SessionsTrades)` (per-day `"HHMM-HHMM,…:DAY"` joined by `|`, days 0–6→"1".."7"); `pricescale=(int)Multiply; volume_precision=VolumeMin; currency_code=CurrencyBase`; plus many constant defaults (timezone `Europe/Istanbul`, exchange `Opofinance`, `supported_resolutions=["1","5","15","30","60","240","1D","1W","1M"]`, etc.).
+- **Symbol → `TVSymbolResponse`:** `type = TypeConverter.pathtotypeConveter(Path)` (split `Path` on `\`, take index 1); `session = TradingSessionConverter.ConvertMt5ToTv(SessionsTrades)` (per-day `"HHMM-HHMM,…:DAY"` joined by `|`, days 0–6→"1".."7"); `pricescale=(int)Multiply; volume_precision=VolumeMin; currency_code=CurrencyBase`; plus many constant defaults (timezone `Etc/UTC`, exchange `TradePlatform`, `supported_resolutions=["1","5","15","30","60","240","1D","1W","1M"]`, etc.).
 - **User → `TVUserResponse`** (`id, name, currency=null, currencysign=null`) and **`TVAccountSummary`** (`title=Login, balance, equity, pl=Profit`).
 - **Trade place → `PlacedOrder`:** `Send_request` POSTs `/api/dealer/send_request` → `answer.Id`, waits 200ms, then polls `/api/dealer/get_request_result?id=` (≤3 retries, 100ms). `updateTime = (UTCUnix + 3h) * 1000`. Status via retcode map (`GetStatusType`, MT5 10001–10010 → TV status int).
 
@@ -408,7 +408,7 @@ When `source=tv`, services reshape MT5 JSON into TV models. Key mappings (must b
 
 ## 8. DEAD: Native MT5 Manager Binary Protocol Stack
 
-`OpoMTSocket.InfraService/Services/Common/Protocol/*` + `Utils/*` + `MT5WebAPI.cs` are a **complete port of MetaQuotes’ reference MT5 Manager API** (native TCP, binary-framed, AES-OFB encrypted), but they are **never invoked at runtime**:
+`LegacyMTSocket.InfraService/Services/Common/Protocol/*` + `Utils/*` + `MT5WebAPI.cs` are a **complete port of MetaQuotes’ reference MT5 Manager API** (native TCP, binary-framed, AES-OFB encrypted), but they are **never invoked at runtime**:
 - `MT5WebAPI` is DI-registered and injected into Login/Order/Position/Trade services, but `grep` shows **zero** `_mt5WebAPI.` method calls — the field is assigned and never used.
 - The live services use `AuthenticateServices` (HTTP) exclusively.
 
@@ -426,12 +426,12 @@ Summary (for completeness only — **not to be ported as functionality**): 9-byt
 
 **Config (`appsettings.json`, plaintext secrets committed):**
 - `Jwt:SecretKey` (HS256 key), `Jwt:Issuer`/`Audience` (present but **not validated**).
-- `ConnectionStrings:OpoFinanceConStr` — active `Server=localhost;Database=OpoFinance;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true` (prior Azure SQL strings commented out).
-- `MT5Config`: `HostUrl=https://tradeapp.opofinance.com`, `Port=443`, `login=7898`, `password=Opo1234@`, `version=4410`, `agent=WebManager`, `type=Manager`, `SymbolDefaultcount=10`, `DefaultSymbolList=EURUSD,USDJPY,XAUUSD,GBPUSD,AUDUSD,USDCAD,USDCHF,DJIUSD,SPXUSD,NDXUSD,DAXEUR,FTSGBP,NZDUSD,EURJPY,EURGBP,EURCHF,GBPJPY,GBPCHF,AUDJPY,AUDCAD`, `ReadDataFromDbOrAPI="false"`, `CRMUrl=https://myaccount.opofinance.com`.
+- `ConnectionStrings:TradePlatformConStr` — active `Server=localhost;Database=TradePlatform;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true` (prior Azure SQL strings commented out).
+- `MT5Config`: `HostUrl=https://mt5.example.com`, `Port=443`, `login=7898`, `password=Opo1234@`, `version=4410`, `agent=WebManager`, `type=Manager`, `SymbolDefaultcount=10`, `DefaultSymbolList=EURUSD,USDJPY,XAUUSD,GBPUSD,AUDUSD,USDCAD,USDCHF,DJIUSD,SPXUSD,NDXUSD,DAXEUR,FTSGBP,NZDUSD,EURJPY,EURGBP,EURCHF,GBPJPY,GBPCHF,AUDJPY,AUDCAD`, `ReadDataFromDbOrAPI="false"`, `CRMUrl=https://crm.example.com`.
 - `Serilog`, `Logging:LogLevel`, `AllowedHosts=*`.
-- Env overrides via double-underscore (`Jwt__SecretKey`, `ConnectionStrings__OpoFinanceConStr`, `MT5Config__password`, …).
+- Env overrides via double-underscore (`Jwt__SecretKey`, `ConnectionStrings__TradePlatformConStr`, `MT5Config__password`, …).
 - **CORS:** single policy `"corsapp"` = `WithOrigins("*").AllowAnyMethod().AllowAnyHeader()`.
-- **Production runtime:** `ASPNETCORE_URLS=http://0.0.0.0:5063`, `ASPNETCORE_ENVIRONMENT=Production`; Windows Scheduled Task `OpoMTSocketProd` on VPS `46.62.247.67`; Swagger at root/`/swagger`, Hangfire at `/hangfire`. (Docker docs assume internal port `8080`, but **no Dockerfile exists** in the repo.)
+- **Production runtime:** `ASPNETCORE_URLS=http://0.0.0.0:5063`, `ASPNETCORE_ENVIRONMENT=Production`; Windows Scheduled Task `LegacyMTSocketProd` on VPS `203.0.113.10`; Swagger at root/`/swagger`, Hangfire at `/hangfire`. (Docker docs assume internal port `8080`, but **no Dockerfile exists** in the repo.)
 - `ServicePointManager.SecurityProtocol = Tls12 | Tls11 | Tls` (downgrades enabled — flagged §13).
 
 **Rate limiting:** none.
@@ -440,7 +440,7 @@ Summary (for completeness only — **not to be ported as functionality**): 9-byt
 
 ## 10. Database & Background Jobs
 
-**Engine:** SQL Server (`Microsoft.EntityFrameworkCore.SqlServer` 8.0.8). DB `OpoFinance`, also holds Hangfire tables. `AddDbContext<PriceHistoryContext>` with `CommandTimeout(300)`.
+**Engine:** SQL Server (`Microsoft.EntityFrameworkCore.SqlServer` 8.0.8). DB `TradePlatform`, also holds Hangfire tables. `AddDbContext<PriceHistoryContext>` with `CommandTimeout(300)`.
 
 **Schema** (one migration `20240927133640_InitialMigration`; PK-only, **no secondary indexes**):
 
@@ -499,9 +499,9 @@ Summary (for completeness only — **not to be ported as functionality**): 9-byt
 
 | Dependency | How wired | Live? |
 |---|---|---|
-| MT5 Manager Web API (`tradeapp.opofinance.com:443`) | `MT5HttpClient` singleton (pinned socket+cookie) + `MT5AuthenticationManager` | **LIVE** |
-| OpoFinance CRM (`myaccount.opofinance.com`) | `LoginService` via `AuthenticateServices.GlobalCRMRequestProcess_Post` (Bearer) | **LIVE** |
-| SQL Server `OpoFinance` | EF Core `PriceHistoryContext` + 3 stored procs; Hangfire storage | **LIVE** |
+| MT5 Manager Web API (`mt5.example.com:443`) | `MT5HttpClient` singleton (pinned socket+cookie) + `MT5AuthenticationManager` | **LIVE** |
+| TradePlatform CRM (`crm.example.com`) | `LoginService` via `AuthenticateServices.GlobalCRMRequestProcess_Post` (Bearer) | **LIVE** |
+| SQL Server `TradePlatform` | EF Core `PriceHistoryContext` + 3 stored procs; Hangfire storage | **LIVE** |
 | Hangfire | `AddHangfire(UseSqlServerStorage)` + `AddHangfireServer` + dashboard | **LIVE** |
 | Serilog | `UseSerilog` console+file | **LIVE** |
 | Swagger/Swashbuckle | `AddSwaggerGen` (registered twice) + `UseSwaggerUI` | **LIVE** |
@@ -520,7 +520,7 @@ Summary (for completeness only — **not to be ported as functionality**): 9-byt
 
 Each item states the existing behavior, the ambiguity, and the **assumption the Go port will make** (default: preserve observable behavior; never silently change it).
 
-1. **MT5 host: `tradeapp.opofinance.com` vs hardcoded `opotrade.azurewebsites.net`.** The named HttpClient `BaseAddress` is `opotrade.azurewebsites.net`, but `MT5HttpClient` prepends `MT5Config.HostUrl` (`tradeapp.opofinance.com:443`) to every path, so the BaseAddress is unused. **Assumption:** real upstream is `https://tradeapp.opofinance.com:443` from `MT5Config`; the Go port uses config only and drops the dead Azure base. (Confirm with user.)
+1. **MT5 host: `mt5.example.com` vs hardcoded `tradeplatform.azurewebsites.net`.** The named HttpClient `BaseAddress` is `tradeplatform.azurewebsites.net`, but `MT5HttpClient` prepends `MT5Config.HostUrl` (`mt5.example.com:443`) to every path, so the BaseAddress is unused. **Assumption:** real upstream is `https://mt5.example.com:443` from `MT5Config`; the Go port uses config only and drops the dead Azure base. (Confirm with user.)
 
 2. **Login does no password check (live fallback).** `GenrateOpoSocketToken(Username)` issues a JWT from username alone. **Assumption:** preserve exactly (any username → token) to avoid breaking clients, but flag as a security defect to fix post-parity. CRM path (`CRMToken` present) does validate via CRM.
 
@@ -566,13 +566,13 @@ Each item states the existing behavior, the ambiguity, and the **assumption the 
 
 ## 15. Source Cross-Reference (for the implementer)
 
-- Host/DI/middleware/`/ws`: `OpoMTSocket/Program.cs`.
-- Controllers: `OpoMTSocket/Controllers/*`, `Controllers/tv/TVOrderController.cs`.
-- Auth filter/middleware: `OpoMTSocket/AttributeValidation/AccountsAuthorizeAttribute.cs`, `Controllers/ValidateAccountMiddleware.cs`.
-- Upstream paths + envelope + JWT: `OpoMTSocket.Core/Helpers/{APIUrl,GlobalResponse,AppConstants,JwtTokenHelper}.cs`.
-- Domain services + MT5 client/auth: `OpoMTSocket.InfraService/Services/*` (esp. `AuthenticateServices.cs`, `MT5HttpClient.cs`, `MT5AuthenticationManager.cs`, `LoginService.cs`).
-- DTOs/enums/mappers: `OpoMTSocket.Core/Models/**`.
-- DB/jobs: `OpoMTSocket.InfraService/{Models/PriceHistoryContext.cs,Jobs/PriceHistoryJob.cs}`, `db/create_stored_procedures.sql`.
-- DEAD native protocol: `OpoMTSocket.InfraService/Services/Common/**`, `Services/MT5WebAPI.cs`.
+- Host/DI/middleware/`/ws`: `LegacyMTSocket/Program.cs`.
+- Controllers: `LegacyMTSocket/Controllers/*`, `Controllers/tv/TVOrderController.cs`.
+- Auth filter/middleware: `LegacyMTSocket/AttributeValidation/AccountsAuthorizeAttribute.cs`, `Controllers/ValidateAccountMiddleware.cs`.
+- Upstream paths + envelope + JWT: `LegacyMTSocket.Core/Helpers/{APIUrl,GlobalResponse,AppConstants,JwtTokenHelper}.cs`.
+- Domain services + MT5 client/auth: `LegacyMTSocket.InfraService/Services/*` (esp. `AuthenticateServices.cs`, `MT5HttpClient.cs`, `MT5AuthenticationManager.cs`, `LoginService.cs`).
+- DTOs/enums/mappers: `LegacyMTSocket.Core/Models/**`.
+- DB/jobs: `LegacyMTSocket.InfraService/{Models/PriceHistoryContext.cs,Jobs/PriceHistoryJob.cs}`, `db/create_stored_procedures.sql`.
+- DEAD native protocol: `LegacyMTSocket.InfraService/Services/Common/**`, `Services/MT5WebAPI.cs`.
 
 *End of Phase 1 analysis. Phase 2 (ARCHITECTURE.md) proposes the Go design and will not be started until you have reviewed this document — though per the process I will proceed to draft the architecture proposal next unless you want changes here first.*

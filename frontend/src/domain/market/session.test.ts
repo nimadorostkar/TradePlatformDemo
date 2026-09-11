@@ -83,9 +83,9 @@ describe('marketState', () => {
     // 22:00 UTC on Wednesday is 01:00 Thursday in Istanbul (UTC+3), which is
     // outside a Wednesday 09:00–17:00 session in that zone.
     const session = '0900-1700:4';
-    expect(marketState(session, 'Europe/Istanbul', at('2026-07-29T22:00:00Z'))).toBe('closed');
+    expect(marketState(session, 'Etc/UTC', at('2026-07-29T22:00:00Z'))).toBe('closed');
     // 09:00 UTC is 12:00 Istanbul on Wednesday — open.
-    expect(marketState(session, 'Europe/Istanbul', at('2026-07-29T09:00:00Z'))).toBe('open');
+    expect(marketState(session, 'Etc/UTC', at('2026-07-29T09:00:00Z'))).toBe('open');
   });
 
   it('handles an overnight session spilling into the next day', () => {

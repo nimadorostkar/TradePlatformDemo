@@ -178,7 +178,7 @@ func TestSymbolTransforms(t *testing.T) {
 	}
 	// constant defaults must serialize
 	b, _ := json.Marshal(byName)
-	for _, want := range []string{`"timezone":"Europe/Istanbul"`, `"exchange":"Opofinance"`, `"volume":1000`} {
+	for _, want := range []string{`"timezone":"Etc/UTC"`, `"exchange":"TradePlatform"`, `"volume":1000`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("missing default %s", want)
 		}

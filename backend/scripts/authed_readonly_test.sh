@@ -8,7 +8,7 @@
 #   any /api/Order|Position|Deal|History mutation (delete/update/restore/cancel/reopen/fix)
 # Every request below is a GET that reads state.
 set -u
-B="${BASE_URL:-https://opotrade-stage-backend.opofinance.com}"
+B="${BASE_URL:-https://example.com}"
 T="${TOKEN:?set TOKEN to the JWT}"
 WSPROBE="${WSPROBE:-./bin/wsprobe}"
 P=0; F=0; N=0

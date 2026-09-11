@@ -1,5 +1,5 @@
 // Command mockmt5 is a local stand-in for the MT5 Manager Web API and the
-// OpoFinance CRM, faithful to the wire contracts the gateway consumes
+// TradePlatform CRM, faithful to the wire contracts the gateway consumes
 // (docs/ANALYSIS.md). It serves the auth handshake (auth/start → auth/answer
 // with a session cookie), the ping path, every data path in
 // internal/mt5/apiurl.go with realistically-shaped bodies, and the CRM
@@ -198,7 +198,7 @@ func main() {
 	mux.HandleFunc("/client-api/login", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Email, Password string }
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		if strings.EqualFold(req.Email, "trader@opofinance.com") && req.Password == "correct-password" {
+		if strings.EqualFold(req.Email, "trader@example.com") && req.Password == "correct-password" {
 			j(w, `{"accessToken":"mock-crm-token"}`)
 			return
 		}

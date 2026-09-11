@@ -1,8 +1,8 @@
 # TradePlatform Gateway (backend)
 
-A production-grade **Go** rewrite of the .NET 8 **OpoMTSocket** gateway — the service
-that sits between OpoFinance client apps (web, TradingView UI, the `ClientWS` console)
-and the **MetaTrader 5 Manager Web API** (`tradeapp.opofinance.com`). It exposes the MT5
+A production-grade **Go** rewrite of the .NET 8 **LegacyMTSocket** gateway — the service
+that sits between TradePlatform client apps (web, TradingView UI, the `ClientWS` console)
+and the **MetaTrader 5 Manager Web API** (`mt5.example.com`). It exposes the MT5
 API as REST endpoints, a `/ws` streaming endpoint, and is designed to scale to ~1,000,000
 users.
 
@@ -16,9 +16,7 @@ users.
 > five paths now 404, with no flag to restore them), and unknown-suffix account
 > types are excluded from the account selector (restorable via
 > `CRM_ALLOWED_ACCOUNT_TYPES` / `CRM_ACCOUNT_TYPE_SUFFIXES`). See
-> [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
-**Latest changes:** [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — the terminal
 backend-requirements work (13 items), the two production issues found while
 deploying it, and the deployment steps.
 **Volume units:** [`docs/VOLUME-UNITS.md`](docs/VOLUME-UNITS.md) — read before
@@ -108,10 +106,6 @@ focused docs below go deeper.
 | [`docs/API.md`](docs/API.md) | every REST endpoint + the WebSocket contract |
 | [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) | every env var: type, default, required, security notes |
 | [`docs/USAGE.md`](docs/USAGE.md) | client guide (curl + WebSocket examples) |
-| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | logging, metrics, failure modes, scaling knobs |
-| [`docs/LAUNCH.md`](docs/LAUNCH.md) | deploy/launch guide, DB migration, go-live checklist, rollback |
-| [`docs/LAUNCH_VPS.md`](docs/LAUNCH_VPS.md) · [`deploy/windows/`](deploy/windows/README.md) | VPS coexistence launch (native Windows binary + PostgreSQL — the production deploy) |
-| [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md) | production audit (PASS/FAIL + fixes) |
 | [`docs/TEST_RESULTS.md`](docs/TEST_RESULTS.md) | build/vet/test/coverage + smoke output |
 | [`docs/ANALYSIS.md`](docs/ANALYSIS.md) · [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/PARITY-NOTES.md`](docs/PARITY-NOTES.md) | .NET behavior reconstruction, design rationale, deviations |
 
@@ -119,7 +113,6 @@ focused docs below go deeper.
 
 - Liveness `/healthz`, readiness `/readyz` (tracks the MT5 session), Prometheus
   `/metrics` (HTTP, WS, and MT5 counters).
-- Kubernetes manifests + topology notes in [`deploy/k8s/`](deploy/k8s/README.md).
   Local stack via `make compose-up`.
 
 ## Configuration

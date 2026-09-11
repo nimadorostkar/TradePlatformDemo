@@ -1,5 +1,5 @@
 // Package auth issues and validates the gateway's client JWTs and talks to the
-// OpoFinance CRM for login/account discovery. JWT signing matches the .NET
+// TradePlatform CRM for login/account discovery. JWT signing matches the .NET
 // service (HS256, ASCII key bytes, "accounts" claim) so tokens are cross-
 // compatible across a migration when the same JWT_SECRET_KEY is used.
 package auth

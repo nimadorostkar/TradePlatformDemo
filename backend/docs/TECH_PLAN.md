@@ -7,7 +7,7 @@ A concise engineering overview. Deep detail lives in
 
 ## What it is
 
-A Go reimplementation of the .NET 8 **OpoMTSocket** gateway: it sits between
+A Go reimplementation of the .NET 8 **LegacyMTSocket** gateway: it sits between
 client apps (web, TradingView UI, console) and the **MT5 Manager Web API**,
 exposing it as REST + a `/ws` stream. **Prime directive:** external behavior
 (routes, payloads incl. exact JSON casing, status codes, WS contract) is
@@ -99,5 +99,4 @@ CRM-only login by default, issuer/audience validated, CORS fail-closed. Internal
 improvements: TimescaleDB instead of SQL Server, circuit breaker + explicit
 timeouts, Prometheus metrics, graceful shutdown, NATS fan-out. Dead .NET code
 (native MT5 binary protocol, SignalR hub) is **not** reproduced. Full list and
-the parity-preserving data-shape decisions: [`PARITY-NOTES.md`](PARITY-NOTES.md)
-and [`PRODUCTION_READINESS.md`](PRODUCTION_READINESS.md).
+the parity-preserving data-shape decisions: [`PARITY-NOTES.md`](PARITY-NOTES.md).

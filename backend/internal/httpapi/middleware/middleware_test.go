@@ -136,12 +136,12 @@ func TestCORS_FailClosed(t *testing.T) {
 	}
 
 	// Allowlisted origin is reflected.
-	h2 := CORS([]string{"https://app.opofinance.com"})(okHandler())
+	h2 := CORS([]string{"https://terminal.example.com"})(okHandler())
 	r2 := httptest.NewRequest(http.MethodGet, "/api/Order/get", nil)
-	r2.Header.Set("Origin", "https://app.opofinance.com")
+	r2.Header.Set("Origin", "https://terminal.example.com")
 	w2 := httptest.NewRecorder()
 	h2.ServeHTTP(w2, r2)
-	if got := w2.Header().Get("Access-Control-Allow-Origin"); got != "https://app.opofinance.com" {
+	if got := w2.Header().Get("Access-Control-Allow-Origin"); got != "https://terminal.example.com" {
 		t.Errorf("allowlisted origin not reflected: %q", got)
 	}
 }

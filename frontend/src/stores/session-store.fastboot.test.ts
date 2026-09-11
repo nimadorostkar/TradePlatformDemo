@@ -153,15 +153,15 @@ describe('account snapshot fast boot', () => {
       },
     ]);
     session.setActiveAccount('7788');
-    sessionStorage.setItem('opotrade.order-draft', '{"volume":"0.01"}');
+    sessionStorage.setItem('tradeplatform.order-draft', '{"volume":"0.01"}');
 
     useSessionStore.getState().reset();
 
     // On a shared computer the next person must find nothing of the previous
     // trader: no login number, no fast-boot snapshot, no half-typed order.
-    expect(localStorage.getItem('opotrade.last-account')).toBeNull();
-    expect(localStorage.getItem('opotrade.last-account-snapshot')).toBeNull();
-    expect(sessionStorage.getItem('opotrade.order-draft')).toBeNull();
+    expect(localStorage.getItem('tradeplatform.last-account')).toBeNull();
+    expect(localStorage.getItem('tradeplatform.last-account-snapshot')).toBeNull();
+    expect(sessionStorage.getItem('tradeplatform.order-draft')).toBeNull();
     expect(useSessionStore.getState().adoptRecalledAccount(['7788'])).toBe(false);
   });
 });

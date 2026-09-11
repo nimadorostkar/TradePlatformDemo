@@ -596,7 +596,7 @@ describe('accountManagerInfo — required Broker API contract', () => {
 
     const info = adapter.accountManagerInfo();
 
-    expect(info.accountTitle).toBe('OpoTrade');
+    expect(info.accountTitle).toBe('TradePlatform');
     expect(info.summary.map((f) => f.text)).toEqual([
       'Balance',
       'Equity',

@@ -164,7 +164,7 @@ type Account struct {
 	AccountKind string `json:"accountKind,omitempty"`
 }
 
-// CRMClient talks to the OpoFinance CRM. It uses its own HTTP client so its
+// CRMClient talks to the TradePlatform CRM. It uses its own HTTP client so its
 // bearer headers never touch the shared MT5 connection.
 type CRMClient struct {
 	baseURL string

@@ -134,7 +134,7 @@ test.describe('workspace', () => {
       .poll(() =>
         page.evaluate(
           () =>
-            JSON.parse(localStorage.getItem('opotrade.workspace.v3.default') ?? '{}').density ??
+            JSON.parse(localStorage.getItem('tradeplatform.workspace.v3.default') ?? '{}').density ??
             null,
         ),
       )
@@ -149,8 +149,8 @@ test.describe('workspace', () => {
 
   test('recovers from a corrupt saved layout instead of failing to start', async ({ page }) => {
     await page.evaluate(() => {
-      localStorage.setItem('opotrade.workspace.v3.default', '{{{ not json');
-      localStorage.setItem('opotrade.workspace.active', 'default');
+      localStorage.setItem('tradeplatform.workspace.v3.default', '{{{ not json');
+      localStorage.setItem('tradeplatform.workspace.active', 'default');
     });
 
     await page.reload();

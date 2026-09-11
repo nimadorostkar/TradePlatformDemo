@@ -75,7 +75,7 @@ describe('GatewaySubscriptionPool', () => {
     expect(socket).toBeDefined();
     expect(socket?.url).not.toContain('test-token');
     expect(socket?.url).not.toContain('access_token');
-    expect(socket?.protocols).toEqual(['opotrade.v1', 'opotrade.jwt.test-token']);
+    expect(socket?.protocols).toEqual(['tradeplatform.v1', 'tradeplatform.jwt.test-token']);
     socket?.open();
     socket?.emit([{ symbolname: 'EURUSD.', bid: 1.1, ask: 1.1002 }]);
 

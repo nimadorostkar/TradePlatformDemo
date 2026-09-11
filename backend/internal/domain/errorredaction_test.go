@@ -15,7 +15,7 @@ import (
 // broker's Manager API and the gateway's database by making calls fail.
 func TestTransportErrorsDoNotLeakInternalTopology(t *testing.T) {
 	secrets := []string{
-		"tradeapp.opofinance.com",
+		"mt5.example.com",
 		"127.0.0.1:5199",
 		"/api/tick/last",
 		"connection refused",
@@ -24,7 +24,7 @@ func TestTransportErrorsDoNotLeakInternalTopology(t *testing.T) {
 		"password=hunter2",
 	}
 	upstream := errors.New(
-		`Get "https://tradeapp.opofinance.com:443/api/tick/last?symbol=EURUSD": dial tcp 127.0.0.1:5199: connect: connection refused`)
+		`Get "https://mt5.example.com:443/api/tick/last?symbol=EURUSD": dial tcp 127.0.0.1:5199: connect: connection refused`)
 
 	env := catchError(upstream)
 	if env.Success {
@@ -50,14 +50,14 @@ func TestTransportErrorsDoNotLeakInternalTopology(t *testing.T) {
 // The redaction has to hold on the path clients actually reach it through, not
 // just on a direct catchError call.
 func TestServiceLevelTransportErrorIsRedacted(t *testing.T) {
-	leaky := fmt.Errorf(`Get "https://tradeapp.opofinance.com:443/api/user/get?login=1010": dial tcp: lookup tradeapp.opofinance.com: no such host`)
+	leaky := fmt.Errorf(`Get "https://mt5.example.com:443/api/user/get?login=1010": dial tcp: lookup mt5.example.com: no such host`)
 	svc := NewUserService(&fakeClient{err: leaky})
 
 	env := svc.Getbylogin(context.Background(), 1010, SourceMT5)
 	if env.Success {
 		t.Fatal("expected failure")
 	}
-	if env.ErrorMessage != nil && strings.Contains(*env.ErrorMessage, "opofinance.com") {
+	if env.ErrorMessage != nil && strings.Contains(*env.ErrorMessage, "example.com") {
 		t.Errorf("service response leaks the upstream host: %s", *env.ErrorMessage)
 	}
 }

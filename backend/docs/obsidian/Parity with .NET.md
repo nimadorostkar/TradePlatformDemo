@@ -3,7 +3,7 @@ tags: [concept]
 ---
 # Parity with .NET
 
-Identical external behavior to the .NET `OpoMTSocket` service.
+Identical external behavior to the .NET `LegacyMTSocket` service.
 
 - **Data shapes** per endpoint preserved: string passthrough vs `source=mt5`
   object vs `source=tv` transform ([[Transforms]]) — golden-tested.

@@ -4,7 +4,7 @@ Every place the sources disagree, what this app does, and why. Resolution
 follows the stated priority: gateway code/tests → working TradingView
 integration → gateway docs → product spec → assumptions.
 
-Audited 2026-07-30 against `opotrade-mt-socket-new` and `trading-view-integration`.
+Audited 2026-07-30 against `tradeplatform-mt-socket-new` and `trading-view-integration`.
 Re-verified 2026-07-31 after the gateway changes described below shipped to
 production. Items marked **RESOLVED** were fixed in the gateway and the
 corresponding client workaround has been REMOVED — a workaround left in place
@@ -33,7 +33,7 @@ Against the current Go gateway, `response.data.order` would be `undefined`,
 `MTStatus` would be `undefined`, and `_validateMTRequestStatus` compares
 `undefined == 0` → `false`, so a **rejected trade would be treated as
 successful** and `_createPositionFromOrder(undefined)` would then throw. The
-working integration points at `opotrade-stage-backend.opofinance.com`, which
+working integration points at `example.com`, which
 evidently still returns the .NET-era shape.
 
 **Resolution (revised 2026-08-06).** `interpretTradeResult` accepts four shapes
@@ -306,7 +306,7 @@ for this account". The client-side check is a UX affordance, not the control.
 
 - `|` separates segments, `,` separates ranges within a segment
 - the digit after `:` is the day, **1 = Sunday … 7 = Saturday**
-- times are in the SYMBOL's timezone (`Europe/Istanbul` by default), not the
+- times are in the SYMBOL's timezone (`Etc/UTC` by default), not the
   browser's
 - a range whose end is not after its start wraps past midnight (`2200-0600`)
 

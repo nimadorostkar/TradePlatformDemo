@@ -75,7 +75,7 @@ wscat -H "Authorization: Bearer $TOKEN" -c "$WS/ws?symbol=EURUSD&id=0&methodtype
 ```js
 const ws = new WebSocket(
   'wss://host/ws?symbol=EURUSD&id=0&methodtype=GetQuotes&TP=1&source=tv',
-  ['opotrade.v1', `opotrade.jwt.${token}`],
+  ['tradeplatform.v1', `tradeplatform.jwt.${token}`],
 );
 ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```

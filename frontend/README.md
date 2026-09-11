@@ -1,8 +1,8 @@
-# Opofinance
+# TradePlatform
 
 A broker-branded web trading terminal: TradingView is the charting engine, and
 everything around it — docks, widgets, order entry, position management — is
-ours, driven by the Go **OpoMTSocket** gateway and MetaTrader 5.
+ours, driven by the Go **LegacyMTSocket** gateway and MetaTrader 5.
 
 > **This is a real-money interface.** Correctness, explicit state, and safe
 > failure come before visual polish. If you are changing anything under
@@ -25,10 +25,12 @@ npm run tv:sync -- --source=/path/to/licensed/package
 npm run dev                   # http://localhost:3100
 ```
 
-Without `tv:sync` the chart will not load and the build will fail its asset
-check — deliberately. There is no fallback to a public TradingView widget,
-because a public widget shows TradingView's own prices rather than the broker's
-MT5 prices, and a chart that disagrees with execution is worse than an error.
+Without `tv:sync` the terminal still builds and runs, and the chart pane shows a
+"library not installed" panel. There is no fallback to a public TradingView
+widget, because a public widget shows TradingView's own prices rather than the
+broker's MT5 prices, and a chart that disagrees with execution is worse than an
+error. Every deployment brings its own Charting Library licence
+(<https://www.tradingview.com/charting-library/>).
 
 ### Running against a local gateway
 

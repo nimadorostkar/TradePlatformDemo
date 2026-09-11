@@ -15,7 +15,7 @@ BASE_URL="${BASE_URL:-http://localhost:5063}"
 METRICS_URL="${METRICS_URL:-http://127.0.0.1:9090/metrics}"
 WS_URL="$(echo "$BASE_URL" | sed 's/^http/ws/')"
 WSPROBE="${WSPROBE:-./bin/wsprobe}"
-CRM_EMAIL="${CRM_EMAIL:-trader@opofinance.com}"
+CRM_EMAIL="${CRM_EMAIL:-trader@example.com}"
 CRM_PASSWORD="${CRM_PASSWORD:-correct-password}"
 OWNED_LOGIN="${OWNED_LOGIN:-1010}"      # in the token's accounts claim
 FOREIGN_LOGIN="${FOREIGN_LOGIN:-9999}"  # NOT in the accounts claim
@@ -51,7 +51,7 @@ echo "$body" | tail -1 | grep -q 200 && echo "$body" | grep -qi "swagger\|opo" &
 
 echo "════ 2. Authentication (production CRM flow) ════"
 TOKEN=""
-expect "crmlogin rejects bad password" 401 POST /api/Authentication/crmlogin '{"email":"trader@opofinance.com","password":"wrong"}'
+expect "crmlogin rejects bad password" 401 POST /api/Authentication/crmlogin '{"email":"trader@example.com","password":"wrong"}'
 expect "crmlogin accepts good creds" 200 POST /api/Authentication/crmlogin "{\"email\":\"$CRM_EMAIL\",\"password\":\"$CRM_PASSWORD\"}"
 CRMTOKEN=$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' /tmp/e2e_body)
 [ -n "$CRMTOKEN" ] && ok "crm token extracted" || bad "no crm token in response"
@@ -176,7 +176,7 @@ expect "removed tv/modifyOrder" 404 POST /api/tv/TVOrder/modifyOrder '{"symbol":
 expect "removed tv/placeOrder" 404 POST /api/tv/TVOrder/placeOrder '{"symbol":"EURUSD","qty":10000,"limitPrice":1.08}'
 
 echo "════ 14. WebSocket contract ════"
-# Authenticate with the opotrade.jwt.<JWT> subprotocol — the production
+# Authenticate with the tradeplatform.jwt.<JWT> subprotocol — the production
 # transport. This section previously used ?access_token=, which the server only
 # accepts when WS_ALLOW_QUERY_TOKEN=true, so the suite silently required a
 # legacy insecure setting and never covered the default path at all.
@@ -185,7 +185,7 @@ ws() { "$WSPROBE" -token "$TOKEN" "$@"; }
 out=$(ws -n 1 -print-subprotocol "$WS_URL/ws?TP=1&methodtype=GetQuotes&symbol=EURUSD&source=tv")
 echo "$out" | grep -q '"symbolname":"EURUSD"' && ok "TP=1 tick stream (tv quote frame)" || bad "TP=1: $out"
 # The JWT-bearing subprotocol must never be echoed back as the negotiated one.
-echo "$out" | grep -q "^SUBPROTOCOL opotrade.v1$" && ok "negotiates opotrade.v1, never echoes the credential" || bad "subprotocol: $(echo "$out" | head -1)"
+echo "$out" | grep -q "^SUBPROTOCOL tradeplatform.v1$" && ok "negotiates tradeplatform.v1, never echoes the credential" || bad "subprotocol: $(echo "$out" | head -1)"
 out=$(ws -n 1 "$WS_URL/ws?TP=2&methodtype=GetPagebyPagePositionWs&login=$OWNED_LOGIN&offset=0&total=10")
 [ -n "$out" ] && ! echo "$out" | grep -q "ERROR\|HTTP" && ok "TP=2 position stream" || bad "TP=2: $out"
 out=$(ws -n 1 "$WS_URL/ws?TP=3&methodtype=Getbylogin&login=$OWNED_LOGIN")
@@ -209,8 +209,8 @@ if [ "${WS_ALLOW_QUERY_TOKEN:-false}" = "false" ]; then
 fi
 
 echo "════ 15. CORS ════"
-hdr=$(curl -s -o /dev/null -D - -H "Origin: https://app.opofinance.com" -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/Test/getServerTime" | grep -i access-control-allow-origin || true)
-echo "$hdr" | grep -q "app.opofinance.com" && ok "allowlisted origin reflected" || bad "CORS allow: $hdr"
+hdr=$(curl -s -o /dev/null -D - -H "Origin: https://terminal.example.com" -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/Test/getServerTime" | grep -i access-control-allow-origin || true)
+echo "$hdr" | grep -q "terminal.example.com" && ok "allowlisted origin reflected" || bad "CORS allow: $hdr"
 hdr=$(curl -s -o /dev/null -D - -H "Origin: https://evil.example.com" -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/Test/getServerTime" | grep -i access-control-allow-origin || true)
 [ -z "$hdr" ] && ok "unlisted origin NOT reflected" || bad "CORS leak: $hdr"
 

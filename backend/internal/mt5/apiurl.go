@@ -1,7 +1,7 @@
 package mt5
 
 // Canonical MT5 Manager Web API path templates, copied verbatim from the .NET
-// OpoMTSocket.Core/Helpers/APIUrl.cs (see docs/ANALYSIS.md §7.5). These are
+// LegacyMTSocket.Core/Helpers/APIUrl.cs (see docs/ANALYSIS.md §7.5). These are
 // fmt-style format strings; argument order matches the original {0},{1},...
 //
 // PARITY: every template — including the deliberate quirk on DeleteClosedOrder

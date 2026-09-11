@@ -108,8 +108,8 @@ describe('token handling', () => {
 
   it('carries the token in a credential subprotocol after the application protocol', () => {
     expect(buildSubscriptionProtocols('secret-jwt')).toEqual([
-      'opotrade.v1',
-      'opotrade.jwt.secret-jwt',
+      'tradeplatform.v1',
+      'tradeplatform.jwt.secret-jwt',
     ]);
   });
 

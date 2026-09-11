@@ -1,4 +1,4 @@
-# Obsidian vault — OpoMTSocket Go Gateway
+# Obsidian vault — LegacyMTSocket Go Gateway
 
 An interlinked knowledge map of every part of the Go gateway. Open it in
 [Obsidian](https://obsidian.md): **Open folder as vault → select this

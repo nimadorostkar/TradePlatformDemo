@@ -4,7 +4,7 @@
 //
 // Authentication:
 //
-//	-token <jwt>   authenticate with the `opotrade.jwt.<JWT>` subprotocol.
+//	-token <jwt>   authenticate with the `tradeplatform.jwt.<JWT>` subprotocol.
 //	               This is the production transport and the only one that works
 //	               against the default configuration.
 //	?access_token= in the URL is the legacy query-string transport, accepted by
@@ -26,14 +26,14 @@ import (
 )
 
 const (
-	wsApplicationProtocol = "opotrade.v1"
-	wsJWTProtocolPrefix   = "opotrade.jwt."
+	wsApplicationProtocol = "tradeplatform.v1"
+	wsJWTProtocolPrefix   = "tradeplatform.jwt."
 )
 
 func main() {
 	n := flag.Int("n", 1, "frames to read")
 	timeout := flag.Duration("timeout", 10*time.Second, "overall timeout")
-	token := flag.String("token", "", "JWT presented via the opotrade.jwt.<JWT> subprotocol")
+	token := flag.String("token", "", "JWT presented via the tradeplatform.jwt.<JWT> subprotocol")
 	printProto := flag.Bool("print-subprotocol", false, "print the negotiated subprotocol before any frame")
 	flag.Parse()
 	url := flag.Arg(0)
@@ -44,7 +44,7 @@ func main() {
 
 	var opts *websocket.DialOptions
 	if *token != "" {
-		// The server negotiates only opotrade.v1, so the secret never appears in
+		// The server negotiates only tradeplatform.v1, so the secret never appears in
 		// the response — offer it alongside the application protocol.
 		opts = &websocket.DialOptions{
 			Subprotocols: []string{wsJWTProtocolPrefix + *token, wsApplicationProtocol},

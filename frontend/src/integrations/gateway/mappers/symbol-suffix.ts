@@ -1,7 +1,7 @@
 /**
  * Symbol suffix policy.
  *
- * OpoFinance MT5 groups append an account-type suffix to certain symbols
+ * TradePlatform MT5 groups append an account-type suffix to certain symbols
  * (`EURUSD.` for ECN, `EURUSD!` for Standard, `EURUSD#` for Social, none for
  * ECNPRO). The gateway speaks SUFFIXED names; TradingView and the UI show
  * UNSUFFIXED names.

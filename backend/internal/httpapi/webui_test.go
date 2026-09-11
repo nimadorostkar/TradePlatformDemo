@@ -11,7 +11,7 @@ import (
 func TestLandingAndSwagger(t *testing.T) {
 	w := httptest.NewRecorder()
 	landingHandler(w, httptest.NewRequest("GET", "/", nil))
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "OpoMTSocket") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "LegacyMTSocket") {
 		t.Errorf("landing: code=%d", w.Code)
 	}
 

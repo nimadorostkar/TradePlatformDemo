@@ -31,7 +31,10 @@ ssh_() { ssh -i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new 
 
 echo "▸ building terminal (${APP_ENV}, ${PUBLIC_ORIGIN}, ${VERSION})"
 ( cd "$ROOT/frontend"
-  npm run tv:check >/dev/null
+  if ! npm run tv:check >/dev/null 2>&1; then
+    echo "  ⚠ TradingView Charting Library not installed — the terminal will run without a chart."
+    echo "    Obtain your own licence (tradingview.com/charting-library), then: npm run tv:sync -- --source=<package>"
+  fi
   VITE_APP_ENV="$APP_ENV" \
   VITE_GATEWAY_HTTP_URL="${PUBLIC_ORIGIN}/gateway" \
   VITE_GATEWAY_WS_URL="${PUBLIC_WS_ORIGIN}/gateway" \
@@ -80,6 +83,6 @@ for _ in $(seq 1 30); do curl -fsS "$PUBLIC_ORIGIN/healthz" >/dev/null 2>&1 && b
 curl -fsS "$PUBLIC_ORIGIN/healthz"; echo
 curl -fsS "$PUBLIC_ORIGIN/gateway/readyz"; echo
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
-  "$PUBLIC_ORIGIN/gateway/api/Authentication/crmlogin" -d '{"email":"trader@opofinance.com","password":"wrong"}')
+  "$PUBLIC_ORIGIN/gateway/api/Authentication/crmlogin" -d '{"email":"trader@example.com","password":"wrong"}')
 [ "$code" = 401 ] && echo "auth path OK (bad password → 401)" || { echo "unexpected crmlogin status $code" >&2; exit 1; }
 echo "✔ deployed ${VERSION} → ${PUBLIC_ORIGIN}"

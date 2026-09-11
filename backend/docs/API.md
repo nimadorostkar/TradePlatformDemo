@@ -80,8 +80,8 @@ token ends the session early no matter what MaxAge says. Omitted means false.
 ### Session restoration (AUTH-001)
 
 `login` additionally stores the session in `HttpOnly; Secure; SameSite=Lax;
-Path=/` cookies (`opotrade_session` = the JWT, `opotrade_crm` = base64url CRM
-token, `opotrade_user` = base64url username), with `Max-Age` equal to
+Path=/` cookies (`tradeplatform_session` = the JWT, `tradeplatform_crm` = base64url CRM
+token, `tradeplatform_user` = base64url username), with `Max-Age` equal to
 `JWT_EXPIRY`. `GET /session` hands them back to the app after a reload; an
 invalid/expired cookie earns a 401 and the cookies are cleared. The cookies are
 a **restoration channel only** — every API route still authenticates with the
@@ -443,8 +443,8 @@ terminal uses the canonical account-scoped `/api/Trade`, `/api/Order`, and
 ## WebSocket — `/ws`
 
 JWT is required by default (`WS_REQUIRE_AUTH=true`). Browsers pass protocols
-`opotrade.v1` and `opotrade.jwt.<jwt>` to the `WebSocket` constructor; the server
-negotiates only `opotrade.v1` and never echoes the credential. Non-browser clients
+`tradeplatform.v1` and `tradeplatform.jwt.<jwt>` to the `WebSocket` constructor; the server
+negotiates only `tradeplatform.v1` and never echoes the credential. Non-browser clients
 may send `Authorization: Bearer <jwt>`. Migration-only query authentication is
 controlled by `WS_ALLOW_QUERY_TOKEN` and should be disabled because URLs are
 commonly logged. **The subscription is the query string** — there is no subscribe
@@ -493,7 +493,7 @@ every ~3s (configurable `WS_PUSH_CADENCE`). Example connect:
 ```js
 const ws = new WebSocket(
   'wss://host/ws?symbol=EURUSD&id=0&methodtype=GetQuotes&TP=1&source=tv',
-  ['opotrade.v1', `opotrade.jwt.${token}`],
+  ['tradeplatform.v1', `tradeplatform.jwt.${token}`],
 );
 ```
 

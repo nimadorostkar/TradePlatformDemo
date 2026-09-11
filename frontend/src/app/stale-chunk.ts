@@ -15,7 +15,7 @@ export function isStaleChunkError(error: Error): boolean {
  * failure inside a minute falls through to whatever error surface called this.
  */
 export function reloadForStaleChunk(): boolean {
-  const KEY = 'opotrade.chunk-reload-at';
+  const KEY = 'tradeplatform.chunk-reload-at';
   let last = 0;
   try {
     last = Number(sessionStorage.getItem(KEY) ?? 0);

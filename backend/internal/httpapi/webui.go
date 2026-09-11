@@ -8,7 +8,7 @@ import (
 // landingHTML is a browser-friendly status page served at "/". It live-checks
 // the health endpoints so opening the base URL confirms the service is up.
 const landingHTML = `<!doctype html><html><head><meta charset="utf-8">
-<title>OpoMTSocket Gateway (Go)</title>
+<title>LegacyMTSocket Gateway (Go)</title>
 <style>
  body{font:15px/1.5 system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 16px;color:#1c1e21}
  h1{font-size:22px;margin:0 0 4px} .sub{color:#666;margin:0 0 20px}
@@ -19,7 +19,7 @@ const landingHTML = `<!doctype html><html><head><meta charset="utf-8">
  a{color:#2563eb;text-decoration:none}a:hover{text-decoration:underline}
  ul{padding-left:18px}
 </style></head><body>
-<h1>OpoMTSocket Gateway <span style="color:#888">(Go)</span></h1>
+<h1>LegacyMTSocket Gateway <span style="color:#888">(Go)</span></h1>
 <p class="sub">MT5 → REST + WebSocket gateway. This page is a status check, not the API.</p>
 <div class="row"><span id="d1" class="dot"></span><b>Liveness</b> <code>/healthz</code> <span id="s1"></span></div>
 <div class="row"><span id="d2" class="dot"></span><b>Readiness</b> <code>/readyz</code> <span id="s2"></span></div>
@@ -48,7 +48,7 @@ const landingHTML = `<!doctype html><html><head><meta charset="utf-8">
 // gateway's own origin, where a browser would happily let it read the bearer
 // token typed into it. Everything below is served by this binary.
 const swaggerHTML = `<!doctype html><html><head><meta charset="utf-8">
-<title>OpoMTSocket API</title>
+<title>LegacyMTSocket API</title>
 <style>
  body{font:14px/1.55 system-ui,sans-serif;max-width:960px;margin:32px auto;padding:0 16px;color:#1c1e21}
  h1{font-size:21px;margin:0 0 2px} .sub{color:#666;margin:0 0 18px}
@@ -71,7 +71,7 @@ const swaggerHTML = `<!doctype html><html><head><meta charset="utf-8">
  pre{background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;max-height:340px;font-size:12px;margin:9px 0 0}
  .err{color:#b91c1c}
 </style></head><body>
-<h1>OpoMTSocket API</h1>
+<h1>LegacyMTSocket API</h1>
 <p class="sub">Rendered from <a href="/openapi.json">/openapi.json</a>. Served entirely by this gateway — no external assets.</p>
 <div class="auth"><b>Bearer token</b><input id="tok" placeholder="paste the JWT from /api/Authentication/login" autocomplete="off"></div>
 <div id="out">Loading&hellip;</div>
@@ -317,7 +317,7 @@ func openAPISpec() []byte {
 	spec := map[string]any{
 		"openapi": "3.0.3",
 		"info": map[string]any{
-			"title": "OpoMTSocket Gateway (Go)", "version": "1.0.0",
+			"title": "LegacyMTSocket Gateway (Go)", "version": "1.0.0",
 			"description": "MT5 → REST + WebSocket gateway. Most endpoints require a Bearer JWT (obtain via /api/Authentication/login).",
 		},
 		"components": map[string]any{

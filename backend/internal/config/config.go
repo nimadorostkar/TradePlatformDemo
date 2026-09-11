@@ -104,7 +104,7 @@ type MT5 struct {
 // BaseURL returns the upstream prefix ("host:port") all paths are appended to.
 func (m MT5) BaseURL() string { return fmt.Sprintf("%s:%d", m.HostURL, m.Port) }
 
-// CRM configures the OpoFinance CRM used for client login / account discovery.
+// CRM configures the TradePlatform CRM used for client login / account discovery.
 //
 // AllowedAccountTypes and AccountTypeSuffixes together are the account-type
 // policy: an account type may only trade through this terminal when its symbol
@@ -197,7 +197,7 @@ type Security struct {
 	// Legacy behavior (unauthenticated /ws) = false.
 	WSRequireAuth bool `env:"WS_REQUIRE_AUTH" envDefault:"true"`
 	// WSAllowQueryToken temporarily accepts access_token in a WebSocket URL for
-	// legacy clients. Prefer the opotrade.jwt.<JWT> subprotocol and disable this
+	// legacy clients. Prefer the tradeplatform.jwt.<JWT> subprotocol and disable this
 	// after clients migrate because URL query strings are commonly logged.
 	WSAllowQueryToken bool `env:"WS_ALLOW_QUERY_TOKEN" envDefault:"false"`
 	// CORSAllowedOrigins is the allowlist. Empty default = fail closed (no
@@ -298,7 +298,7 @@ type Content struct {
 	// per-symbol setting and not something MT5 will enumerate for us — so the
 	// permitted values can only come from the broker, and until they do, the
 	// terminal must not offer a control that writes to a live account. Set
-	// this only once OpoFinance confirms traders may change their own.
+	// this only once TradePlatform confirms traders may change their own.
 	LeverageChoices string        `env:"LEVERAGE_CHOICES" envDefault:""`
 	CacheTTL        time.Duration `env:"CONTENT_CACHE_TTL" envDefault:"60s"`
 	Timeout         time.Duration `env:"CONTENT_TIMEOUT" envDefault:"10s"`

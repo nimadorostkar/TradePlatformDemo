@@ -5,8 +5,8 @@
  * VERIFIED gateway contract (internal/realtime/{params,ws,dispatch}.go):
  *   - The subscription IS the connect-URL query string. There is NO
  *     subscribe/unsubscribe message protocol.
- *   - Browser auth uses the `opotrade.jwt.<JWT>` WebSocket subprotocol. The
- *     server negotiates only `opotrade.v1`, so the credential is never echoed.
+ *   - Browser auth uses the `tradeplatform.jwt.<JWT>` WebSocket subprotocol. The
+ *     server negotiates only `tradeplatform.v1`, so the credential is never echoed.
  *   - The server pushes `JSON.stringify(envelope.data)` — the bare data, NOT
  *     the REST envelope — at the configured cadence (WS_PUSH_CADENCE, 3s).
  *   - Dispatch is by `TP`: 1=Tick, 2=Position, 3=User, 4=Order, 5=Tick(daily).
@@ -124,8 +124,8 @@ export function buildSubscriptionUrl(baseWsUrl: string, query: WsQuery): string 
   return url.toString();
 }
 
-const APPLICATION_PROTOCOL = 'opotrade.v1';
-const JWT_PROTOCOL_PREFIX = 'opotrade.jwt.';
+const APPLICATION_PROTOCOL = 'tradeplatform.v1';
+const JWT_PROTOCOL_PREFIX = 'tradeplatform.jwt.';
 
 /**
  * Browser-compatible authentication without putting a bearer credential in a

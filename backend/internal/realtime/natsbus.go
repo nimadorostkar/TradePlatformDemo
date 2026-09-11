@@ -19,7 +19,7 @@ func NewNATSBus(url string) (*NATSBus, error) {
 	nc, err := nats.Connect(url,
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2*time.Second),
-		nats.Name("opotrade-gateway"),
+		nats.Name("tradeplatform-gateway"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("nats connect: %w", err)

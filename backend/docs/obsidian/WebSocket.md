@@ -5,7 +5,7 @@ tags: [component, api]
 
 `internal/realtime`. Subscription = **query string** (no subscribe message).
 Pushes the serialized `data` every ~3 s. Browser JWT via the
-`opotrade.jwt.<JWT>` WebSocket subprotocol; the URL remains credential-free.
+`tradeplatform.jwt.<JWT>` WebSocket subprotocol; the URL remains credential-free.
 
 | TP | Service | methodtype |
 |---|---|---|

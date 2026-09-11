@@ -90,7 +90,7 @@ describe('LocalWorkspaceStore recovery', () => {
   it('recovers to the default layout when the stored document is corrupt', async () => {
     // A malformed saved layout must never prevent the terminal from starting.
     const store = new LocalWorkspaceStore(
-      storageWith({ 'opotrade.workspace.v3.default': '{ this is not json' }),
+      storageWith({ 'tradeplatform.workspace.v3.default': '{ this is not json' }),
     );
     const result = await store.load('default');
 
@@ -102,7 +102,7 @@ describe('LocalWorkspaceStore recovery', () => {
   it('recovers when the document is valid JSON but fails validation', async () => {
     const store = new LocalWorkspaceStore(
       storageWith({
-        'opotrade.workspace.v3.default': JSON.stringify({
+        'tradeplatform.workspace.v3.default': JSON.stringify({
           schemaVersion: WORKSPACE_SCHEMA_VERSION,
           id: 'default',
           // `name`, `regions`, `watchlists` and more are missing.

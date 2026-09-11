@@ -77,7 +77,7 @@ const INITIAL: OrderDraft = {
  * "Values applied from Risk calculator" onto a reloaded tab would be a claim
  * about an event the trader can no longer see.
  */
-const STORAGE_KEY = 'opotrade.order-draft';
+const STORAGE_KEY = 'tradeplatform.order-draft';
 
 type PersistedDraft = Pick<
   OrderDraftState,

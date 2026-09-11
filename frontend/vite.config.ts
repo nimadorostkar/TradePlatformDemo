@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   const gatewayProxyTarget = config.DEV_GATEWAY_PROXY_TARGET;
   const crmProxyTarget = config.DEV_CRM_PROXY_TARGET;
 
-  // Mirror the production edge (deploy/caddy/opotrade-ui.caddy): the gateway
+  // Mirror the production edge (deploy/edge/nginx.conf at the repository root): the gateway
   // is served same-origin under /gateway and the CRM under /crm, so the dev
   // server needs no CORS widening on either upstream. Each proxy is only
   // installed when its target is configured.

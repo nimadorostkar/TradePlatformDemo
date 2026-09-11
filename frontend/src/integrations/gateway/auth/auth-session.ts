@@ -3,7 +3,7 @@ import type { AccountOption } from '../mappers/to-domain';
 /**
  * Authentication is expressed as an interface with swappable adapters, because
  * this platform can run standalone (it owns the login screen) or be launched
- * from an existing OpoFinance client (it receives a session).
+ * from an existing TradePlatform client (it receives a session).
  *
  * Only flows VERIFIED in the two reference repositories are implemented:
  *   1. CRM login  → POST {gateway}/api/Authentication/crmlogin

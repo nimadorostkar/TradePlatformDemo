@@ -44,7 +44,7 @@ function setEnvironment(mode: string) {
       environment: {
         name: 'production',
         tradingMode: mode,
-        mt5Server: 'https://tradeapp.opofinance.com',
+        mt5Server: 'https://mt5.example.com',
         buildSha: '14725d5b628',
         apiVersion: '2',
       },

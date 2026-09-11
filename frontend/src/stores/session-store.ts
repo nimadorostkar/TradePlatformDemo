@@ -200,8 +200,8 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
  * Layout preferences legitimately survive — they carry no account data.
  */
 const SURVIVES_SIGN_OUT: readonly string[] = [
-  'opotrade.workspace.', // saved layouts, panel sizes, the active workspace
-  'opotrade.chunk-reload-at', // stale-build recovery marker, not user data
+  'tradeplatform.workspace.', // saved layouts, panel sizes, the active workspace
+  'tradeplatform.chunk-reload-at', // stale-build recovery marker, not user data
 ];
 
 /** Legacy token keys, cleared whenever VITE_ENABLE_LEGACY_AUTH_STORAGE was on. */
@@ -218,14 +218,14 @@ const LEGACY_AUTH_KEYS: readonly string[] = ['token', 'crm_token'];
  * invented yet. Neither alone is enough.
  */
 const KNOWN_ACCOUNT_SCOPED_KEYS: readonly string[] = [
-  'opotrade.last-account',
-  'opotrade.last-account-snapshot',
-  'opotrade.order-draft',
-  'opotrade.journal.v1',
-  'opotrade.tv-qty-default.v2',
-  'opotrade.last-activity',
-  'opotrade.tv.charts',
-  'opotrade.tv.drawings',
+  'tradeplatform.last-account',
+  'tradeplatform.last-account-snapshot',
+  'tradeplatform.order-draft',
+  'tradeplatform.journal.v1',
+  'tradeplatform.tv-qty-default.v2',
+  'tradeplatform.last-activity',
+  'tradeplatform.tv.charts',
+  'tradeplatform.tv.drawings',
   ...LEGACY_AUTH_KEYS,
 ];
 
@@ -250,7 +250,7 @@ export function clearAccountScopedIn(
       doomed.push(key);
       continue;
     }
-    if (!key.startsWith('opotrade.')) continue;
+    if (!key.startsWith('tradeplatform.')) continue;
     if (SURVIVES_SIGN_OUT.some((prefix) => key.startsWith(prefix))) continue;
     doomed.push(key);
   }
@@ -273,7 +273,7 @@ export function clearAccountScopedStorage(): void {
 // The last selected account, so a restored session (AUTH-001) reopens on the
 // account the trader was actually using. A login NUMBER is stored — never a
 // credential — and a blocked/full storage silently degrades to "first account".
-const LAST_ACCOUNT_KEY = 'opotrade.last-account';
+const LAST_ACCOUNT_KEY = 'tradeplatform.last-account';
 
 function rememberLastAccount(login: string): void {
   try {
@@ -294,7 +294,7 @@ export function recallLastAccount(): string | null {
 // The fast-boot snapshot: enough about the last active account to render the
 // terminal before the CRM list arrives. Written only from a RESOLVED account
 // (see setActiveAccount), read once per boot by adoptRecalledAccount.
-const ACCOUNT_SNAPSHOT_KEY = 'opotrade.last-account-snapshot';
+const ACCOUNT_SNAPSHOT_KEY = 'tradeplatform.last-account-snapshot';
 
 interface AccountSnapshot {
   login: string;

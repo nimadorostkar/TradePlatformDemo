@@ -6,7 +6,7 @@ import { z } from 'zod';
  * The same build serves multiple brokers/environments: branding is fetched
  * from `VITE_BRAND_CONFIG_URL` at startup and validated before any of it
  * touches the DOM. If the fetch or validation fails we fall back to the safe
- * built-in Opofinance identity rather than rendering a half-branded terminal.
+ * built-in TradePlatform identity rather than rendering a half-branded terminal.
  */
 
 /** Only http(s) links are accepted; `javascript:` and `data:` are rejected. */
@@ -59,23 +59,23 @@ export type BrandConfig = z.infer<typeof brandConfigSchema>;
  * Production fallback used when no runtime brand document is configured.
  */
 export const DEFAULT_BRAND: BrandConfig = {
-  brokerName: 'Opofinance',
-  platformName: 'Opofinance',
-  logoUrl: '/brand/opofinance-logo.svg',
-  compactLogoUrl: '/brand/opofinance-logo.svg',
-  faviconUrl: '/brand/opofinance-logo.svg',
+  brokerName: 'TradePlatform',
+  platformName: 'TradePlatform',
+  logoUrl: '/brand/tradeplatform-logo.svg',
+  compactLogoUrl: '/brand/tradeplatform-logo.svg',
+  faviconUrl: '/brand/tradeplatform-logo.svg',
   // #3366ee, not the old #3772ff: white button text on this colour measures
   // 4.91:1 where the old value sat at 4.19:1, below WCAG AA on the primary
   // call to action in both themes (HGH-04). Matches the token default.
   primaryColor: '#3366ee',
   secondaryColor: '#6c8cff',
   legalLinks: [],
-  createAccountUrl: 'https://client.opofinance.com/accounts',
+  createAccountUrl: 'https://client.example.com/accounts',
   // Verified live against the CRM's own sign-in page (2026-08-25): these are
   // the routes its "Forgot Password" and "Sign up" links point at.
-  forgotPasswordUrl: 'https://client.opofinance.com/auth/reset-password',
-  signUpUrl: 'https://client.opofinance.com/auth/sign-up',
-  supportUrl: 'https://opofinance.com/company/contact-us',
+  forgotPasswordUrl: 'https://client.example.com/auth/reset-password',
+  signUpUrl: 'https://client.example.com/auth/sign-up',
+  supportUrl: 'https://example.com/company/contact-us',
   defaultTheme: 'dark',
 };
 

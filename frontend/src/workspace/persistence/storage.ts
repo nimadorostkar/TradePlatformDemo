@@ -53,9 +53,9 @@ export interface WorkspaceLoadResult {
 type ReadResult<T> =
   { status: 'absent' } | { status: 'ok'; value: T } | { status: 'unreadable'; reason: string };
 
-const KEY_PREFIX = 'opotrade.workspace.v3.';
-const INDEX_KEY = 'opotrade.workspace.index';
-const ACTIVE_KEY = 'opotrade.workspace.active';
+const KEY_PREFIX = 'tradeplatform.workspace.v3.';
+const INDEX_KEY = 'tradeplatform.workspace.index';
+const ACTIVE_KEY = 'tradeplatform.workspace.active';
 
 export class LocalWorkspaceStore implements WorkspaceStore {
   private readonly storage: Storage | null;

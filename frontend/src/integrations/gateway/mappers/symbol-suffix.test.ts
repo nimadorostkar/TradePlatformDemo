@@ -47,7 +47,7 @@ describe('SymbolSuffixPolicy.toGateway', () => {
   });
 
   it('strips an exchange prefix', () => {
-    expect(ecn.toGateway('Opofinance:EURUSD')).toBe('EURUSD.');
+    expect(ecn.toGateway('TradePlatform:EURUSD')).toBe('EURUSD.');
   });
 
   it('appends nothing when the account type has no suffix', () => {

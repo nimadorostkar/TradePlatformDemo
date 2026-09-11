@@ -11,7 +11,7 @@ import { expect, signIn, test } from './fixtures/gateway';
  * production.
  */
 
-const CREATE_ACCOUNT_URL = 'https://client.opofinance.com/accounts';
+const CREATE_ACCOUNT_URL = 'https://client.example.com/accounts';
 
 test.describe('no tradable account', () => {
   test('offers Create Account instead of a dead end', async ({ page, gateway }) => {

@@ -142,8 +142,9 @@ declare global {
 export class TradingViewNotLoadedError extends Error {
   constructor(libraryPath: string) {
     super(
-      `The TradingView library did not load from "${libraryPath}". ` +
-        'Run `npm run tv:sync` to copy the licensed package into public/charting_library.',
+      `The TradingView Charting Library is not installed in this deployment (nothing served at "${libraryPath}"). ` +
+        'Obtain your own licence at tradingview.com/charting-library, then run `npm run tv:sync -- --source=<package>` and redeploy. ' +
+        'Trading, quotes and positions keep working without the chart.',
     );
     this.name = 'TradingViewNotLoadedError';
   }

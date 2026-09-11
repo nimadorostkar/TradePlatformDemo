@@ -38,13 +38,13 @@ import (
 //     documented in docs/API.md.
 
 const (
-	sessionCookieName = "opotrade_session"
-	crmCookieName     = "opotrade_crm"
-	userCookieName    = "opotrade_user"
+	sessionCookieName = "tradeplatform_session"
+	crmCookieName     = "tradeplatform_crm"
+	userCookieName    = "tradeplatform_user"
 	// Present (value "1") only when the trader asked to be remembered
 	// (MED-02). Its absence makes every session cookie browser-session-only,
 	// and the /session re-mint consults it so the choice survives renewal.
-	persistCookieName = "opotrade_persist"
+	persistCookieName = "tradeplatform_persist"
 )
 
 // sessionResponse mirrors the login response family: bare JSON, not enveloped.

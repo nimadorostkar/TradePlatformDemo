@@ -30,26 +30,28 @@ function makeStorage(seed: Record<string, string> = {}): Storage {
  * the previous trader's account number, notes and half-typed order.
  */
 const ACCOUNT_SCOPED_LOCAL = {
-  'opotrade.last-account': '15597243',
-  'opotrade.last-account-snapshot': '{"login":"15597243","suffix":"","readOnly":false}',
-  'opotrade.journal.v1': '{"version":1,"entries":[{"body":"my thesis"}]}',
-  'opotrade.tv-qty-default.v2': '0.25',
-  'opotrade.last-activity': '1787740000',
-  'opotrade.tv.charts': '{"layout":"…"}',
-  'opotrade.tv.drawings': '{"lines":[]}',
+  'tradeplatform.last-account': '15597243',
+  'tradeplatform.last-account-snapshot': '{"login":"15597243","suffix":"","readOnly":false}',
+  'tradeplatform.journal.v1': '{"version":1,"entries":[{"body":"my thesis"}]}',
+  'tradeplatform.tv-qty-default.v2': '0.25',
+  'tradeplatform.last-activity': '1787740000',
+  'tradeplatform.tv.charts': '{"layout":"…"}',
+  'tradeplatform.tv.drawings': '{"lines":[]}',
 };
 
 const LAYOUT_KEPT = {
-  'opotrade.workspace.active': 'default',
-  'opotrade.workspace.index': '["default"]',
-  'opotrade.workspace.v3.default': '{"regions":{}}',
-  'opotrade.chunk-reload-at': '1787740000',
+  'tradeplatform.workspace.active': 'default',
+  'tradeplatform.workspace.index': '["default"]',
+  'tradeplatform.workspace.v3.default': '{"regions":{}}',
+  'tradeplatform.chunk-reload-at': '1787740000',
 };
 
 describe('sign-out clears account-scoped storage', () => {
   it('removes every account-scoped key from both storages', () => {
     const local = makeStorage(ACCOUNT_SCOPED_LOCAL);
-    const session = makeStorage({ 'opotrade.order-draft': '{"kind":"market","volume":"0.01"}' });
+    const session = makeStorage({
+      'tradeplatform.order-draft': '{"kind":"market","volume":"0.01"}',
+    });
 
     clearAccountScopedIn(local);
     clearAccountScopedIn(session);
@@ -57,7 +59,7 @@ describe('sign-out clears account-scoped storage', () => {
     for (const key of Object.keys(ACCOUNT_SCOPED_LOCAL)) {
       expect(local.getItem(key), `${key} survived sign-out`).toBeNull();
     }
-    expect(session.getItem('opotrade.order-draft')).toBeNull();
+    expect(session.getItem('tradeplatform.order-draft')).toBeNull();
   });
 
   it('keeps layout preferences, which carry no account data', () => {
@@ -74,14 +76,14 @@ describe('sign-out clears account-scoped storage', () => {
     // The actual guarantee. The previous implementation deleted a fixed list,
     // so every key added after it was written leaked by default. This is the
     // regression that must not return.
-    const local = makeStorage({ 'opotrade.something-added-next-month': 'account data' });
-    const session = makeStorage({ 'opotrade.another-new-thing': 'account data' });
+    const local = makeStorage({ 'tradeplatform.something-added-next-month': 'account data' });
+    const session = makeStorage({ 'tradeplatform.another-new-thing': 'account data' });
 
     clearAccountScopedIn(local);
     clearAccountScopedIn(session);
 
-    expect(local.getItem('opotrade.something-added-next-month')).toBeNull();
-    expect(session.getItem('opotrade.another-new-thing')).toBeNull();
+    expect(local.getItem('tradeplatform.something-added-next-month')).toBeNull();
+    expect(session.getItem('tradeplatform.another-new-thing')).toBeNull();
   });
 
   it('clears the legacy auth-storage keys', () => {
@@ -104,7 +106,7 @@ describe('sign-out clears account-scoped storage', () => {
     // Removing while enumerating skips every other key — the classic version
     // of this bug, which would leave half the data behind.
     const seed: Record<string, string> = {};
-    for (let i = 0; i < 12; i++) seed[`opotrade.scoped-${i}`] = String(i);
+    for (let i = 0; i < 12; i++) seed[`tradeplatform.scoped-${i}`] = String(i);
     const local = makeStorage(seed);
 
     clearAccountScopedIn(local);

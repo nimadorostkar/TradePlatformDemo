@@ -23,7 +23,7 @@
  * quantity the trader chose is left alone — and the pass runs once per browser.
  */
 
-const STAMP = 'opotrade.tv-qty-default.v2';
+const STAMP = 'tradeplatform.tv-qty-default.v2';
 const LIBRARY_DEFAULT_QTY = 1;
 const TRADING_KEY = /^tradingview\.trading\./;
 

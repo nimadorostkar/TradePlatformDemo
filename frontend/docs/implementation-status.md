@@ -4,8 +4,8 @@ Evidence, not percentages. Last verified 2026-07-31.
 
 ## Production posture
 
-Deployed at `https://46.62.247.67`, serving a **production** MT5 gateway
-(whitelisted server, production OpoMTSocket). There is no demo environment.
+Deployed at `https://203.0.113.10`, serving a **production** MT5 gateway
+(whitelisted server, production LegacyMTSocket). There is no demo environment.
 
 The shipped bundle is production-configured **on its own**: `VITE_APP_ENV`,
 the HTTPS/WSS gateway URLs, trade confirmation, and the legacy-token-storage

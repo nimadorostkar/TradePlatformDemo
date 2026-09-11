@@ -48,7 +48,7 @@ describe('retireLegacyChartQuantities', () => {
   it('runs once per browser', () => {
     entries.set('tradingview.trading.Broker', JSON.stringify({ qty: { EURUSD: 1 } }));
     retireLegacyChartQuantities();
-    expect(entries.get('opotrade.tv-qty-default.v2')).toBe('1');
+    expect(entries.get('tradeplatform.tv-qty-default.v2')).toBe('1');
 
     // A quantity the trader sets to 1 deliberately, later, must survive.
     entries.set('tradingview.trading.Broker', JSON.stringify({ qty: { EURUSD: 1 } }));
@@ -59,11 +59,11 @@ describe('retireLegacyChartQuantities', () => {
   it('leaves keys it does not understand alone', () => {
     entries.set('tradingview.trading.tradingPanelOpened', 'false');
     entries.set('tradingview.chartproperties', '{"timezone":"Etc/UTC"}');
-    entries.set('opotrade.workspace.v3.default', '{"symbols":[]}');
+    entries.set('tradeplatform.workspace.v3.default', '{"symbols":[]}');
 
     expect(() => retireLegacyChartQuantities()).not.toThrow();
     expect(entries.get('tradingview.trading.tradingPanelOpened')).toBe('false');
     expect(entries.get('tradingview.chartproperties')).toBe('{"timezone":"Etc/UTC"}');
-    expect(entries.get('opotrade.workspace.v3.default')).toBe('{"symbols":[]}');
+    expect(entries.get('tradeplatform.workspace.v3.default')).toBe('{"symbols":[]}');
   });
 });

@@ -1,5 +1,5 @@
 // Command paritycheck replays identical requests against the legacy .NET
-// OpoMTSocket and the Go gateway and compares the responses (Phase-1
+// LegacyMTSocket and the Go gateway and compares the responses (Phase-1
 // validation, item 2).
 //
 // JSON comparison is structural-first: missing/extra keys and type mismatches

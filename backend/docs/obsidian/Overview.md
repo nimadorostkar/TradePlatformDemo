@@ -3,7 +3,7 @@ tags: [core]
 ---
 # Overview
 
-A stateful **API gateway** between OpoFinance clients (web, TradingView UI,
+A stateful **API gateway** between TradePlatform clients (web, TradingView UI,
 console) and the **MetaTrader 5 Manager Web API**. Exposes MT5 as [[REST API]]
 endpoints and a [[WebSocket]] stream. Faithful Go port of the .NET service —
 see [[Parity with .NET]].

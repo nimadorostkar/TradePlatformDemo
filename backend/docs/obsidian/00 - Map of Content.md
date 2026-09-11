@@ -2,7 +2,7 @@
 tags: [moc]
 aliases: [Home, Start Here]
 ---
-# OpoMTSocket Go Gateway — Map of Content
+# LegacyMTSocket Go Gateway — Map of Content
 
 Go reimplementation of the .NET 8 MT5 gateway. Open this folder as an Obsidian
 vault and use the **Graph view** to see all parts. Start at [[Overview]].

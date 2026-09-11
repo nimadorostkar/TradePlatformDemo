@@ -110,7 +110,7 @@ describe('mapTvSymbol chart metadata', () => {
         description: 'Gold vs US Dollar',
         type: 'Metals',
         session,
-        timezone: 'Europe/Istanbul',
+        timezone: 'Etc/UTC',
         exchange: 'Broker',
         listed_exchange: 'Broker',
         format: 'price',
@@ -137,7 +137,7 @@ describe('mapTvSymbol chart metadata', () => {
       ecn,
     );
 
-    expect(mapped.timezone).toBe('Europe/Istanbul');
+    expect(mapped.timezone).toBe('Etc/UTC');
     expect(mapped.session).toBe(session);
   });
 });
@@ -1072,8 +1072,8 @@ describe('symbol type across suffixed deployments', () => {
       type: 'Forex!',
       session: '24x7',
       timezone: 'Etc/UTC',
-      exchange: 'Opofinance',
-      listed_exchange: 'Opofinance',
+      exchange: 'TradePlatform',
+      listed_exchange: 'TradePlatform',
       format: 'price',
       pricescale: 100000,
       minmov: 1,

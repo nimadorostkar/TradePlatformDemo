@@ -72,7 +72,7 @@ TradingView's contract is: **bar `time` is a UTC timestamp, and
 returns the right value — `/api/Symbol/getsymbolsbyname?source=tv` includes:
 
 ```json
-{ "timezone": "Europe/Istanbul", "session": "0000-2400:2|0000-2400:3|..." }
+{ "timezone": "Etc/UTC", "session": "0000-2400:2|0000-2400:3|..." }
 ```
 
 So pass `timezone` and `session` straight from the symbol response into
@@ -167,7 +167,7 @@ symbolInfo.timezone controls what the axis displays.
 
 Our symbol endpoint GET /api/Symbol/getsymbolsbyname?symbol=<SYM>&source=tv
 already returns the correct values, e.g.:
-  { "timezone": "Europe/Istanbul", "session": "0000-2400:2|0000-2400:3|0000-2400:4|0000-2400:5|0000-2400:6", ... }
+  { "timezone": "Etc/UTC", "session": "0000-2400:2|0000-2400:3|0000-2400:4|0000-2400:5|0000-2400:6", ... }
 
 Find where we build LibrarySymbolInfo in the datafeed and make it pass the
 API's `timezone` and `session` through, instead of any hardcoded value. Do not

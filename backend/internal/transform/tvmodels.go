@@ -226,9 +226,9 @@ type TVSymbolResponse struct {
 // constant defaults. Transforms then fill the per-symbol fields.
 func NewTVSymbolResponse() TVSymbolResponse {
 	return TVSymbolResponse{
-		Timezone:             "Europe/Istanbul",
-		Exchange:             "Opofinance",
-		ListedExchange:       "Opofinance",
+		Timezone:             "Etc/UTC",
+		Exchange:             "TradePlatform",
+		ListedExchange:       "TradePlatform",
 		Format:               "price",
 		MinMov:               1,
 		DataStatus:           "streaming",

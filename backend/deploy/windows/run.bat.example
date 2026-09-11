@@ -1,8 +1,0 @@
-@echo off
-rem Compatibility wrapper only. Production configuration belongs in the
-rem ACL-protected gateway.env file and is loaded by run.ps1.
-powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass ^
-  -File "C:\opomtsocket-go\run.ps1" ^
-  -Dir "C:\opomtsocket-go" ^
-  -Config "C:\opomtsocket-go\gateway.env"
-exit /b %ERRORLEVEL%

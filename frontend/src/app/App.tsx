@@ -188,7 +188,7 @@ export function AuthenticatedApp() {
     if (status !== 'signed-in') return;
     if (services.auth.remembered?.() === true) return;
 
-    const KEY = 'opotrade.last-activity';
+    const KEY = 'tradeplatform.last-activity';
     const IDLE_LIMIT_MS = 60 * 60 * 1000;
     let lastWrite = 0;
 

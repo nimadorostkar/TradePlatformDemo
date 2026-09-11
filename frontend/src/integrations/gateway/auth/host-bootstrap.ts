@@ -4,7 +4,7 @@ import { z } from 'zod';
 /**
  * Host session bootstrap.
  *
- * When this terminal is embedded in the existing OpoFinance client (web or
+ * When this terminal is embedded in the existing TradePlatform client (web or
  * React-Native webview), the host supplies the CRM token via `postMessage`.
  *
  * Two hard rules:
@@ -16,7 +16,7 @@ import { z } from 'zod';
  */
 
 const hostMessageSchema = z.object({
-  type: z.literal('opotrade:session'),
+  type: z.literal('tradeplatform:session'),
   crmToken: z.string().min(16),
   username: z.string().max(320).optional(),
 });
@@ -70,8 +70,8 @@ export function awaitHostSession(
     // Announce readiness to the opener/parent so the host knows to send.
     try {
       for (const origin of allowedOrigins) {
-        target.parent?.postMessage({ type: 'opotrade:ready' }, origin);
-        target.opener?.postMessage({ type: 'opotrade:ready' }, origin);
+        target.parent?.postMessage({ type: 'tradeplatform:ready' }, origin);
+        target.opener?.postMessage({ type: 'tradeplatform:ready' }, origin);
       }
     } catch {
       // Cross-origin restrictions on parent/opener are expected and harmless.

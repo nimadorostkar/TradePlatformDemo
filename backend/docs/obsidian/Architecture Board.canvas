@@ -12,7 +12,7 @@
     {"id":"transform","type":"file","file":"Transforms.md","x":-120,"y":-200,"width":260,"height":110,"color":"4"},
     {"id":"mt5","type":"file","file":"MT5 Session.md","x":-120,"y":60,"width":260,"height":110,"color":"4"},
     {"id":"breaker","type":"file","file":"Circuit Breaker.md","x":220,"y":60,"width":250,"height":110,"color":"4"},
-    {"id":"broker","type":"text","text":"## 🏦 MT5 Web API\ntradeapp.opofinance.com\n(whitelisted IP)","x":540,"y":60,"width":260,"height":120,"color":"1"},
+    {"id":"broker","type":"text","text":"## 🏦 MT5 Web API\nmt5.example.com\n(whitelisted IP)","x":540,"y":60,"width":260,"height":120,"color":"1"},
     {"id":"db","type":"file","file":"Database.md","x":-120,"y":340,"width":260,"height":110,"color":"6"},
     {"id":"jobs","type":"file","file":"Price-History Jobs.md","x":220,"y":340,"width":260,"height":110,"color":"6"},
     {"id":"moc","type":"file","file":"00 - Map of Content.md","x":-1480,"y":340,"width":260,"height":130,"color":"3"}

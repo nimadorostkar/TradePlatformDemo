@@ -1572,7 +1572,7 @@ export class GatewayBrokerAdapter {
     ];
 
     return {
-      accountTitle: 'OpoTrade',
+      accountTitle: 'TradePlatform',
       summary: [
         { text: 'Balance', wValue: summary.balance, formatter: std('fixed'), isDefault: true },
         { text: 'Equity', wValue: summary.equity, formatter: std('fixed'), isDefault: true },

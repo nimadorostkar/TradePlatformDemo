@@ -17,7 +17,7 @@ import (
 	"github.com/nimadorostkar/TradePlatformDemo/backend/internal/mt5"
 )
 
-// AppConstants literals (OpoMTSocket.Core/Helpers/AppConstants.cs).
+// AppConstants literals (LegacyMTSocket.Core/Helpers/AppConstants.cs).
 const (
 	SuccessMessage       = "Success: Action performed successfully."
 	ErrorMessageTemplate = "Error: Action performed while processing is: {0}."

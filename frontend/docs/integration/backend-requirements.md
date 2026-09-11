@@ -8,7 +8,7 @@ already does while it waits. Nothing here is required for the terminal to run �
 every gap has an honest fallback today.
 
 > **Status 2026-07-31 — items 1–12 shipped to production.** Verified against the
-> live gateway and against `opotrade-mt-socket-new`. The client now adopts the
+> live gateway and against `tradeplatform-mt-socket-new`. The client now adopts the
 > new contracts; see the delivery notes at the bottom for what changed on this
 > side, including one workaround that had to be REMOVED rather than kept.
 > Item 13 (news / calendar) remains unimplemented and its panels stay gated off.

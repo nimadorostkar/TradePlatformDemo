@@ -1,4 +1,4 @@
-# OpoMTSocket-Go — Architecture Proposal (Phase 2)
+# TradePlatform gateway — Architecture Proposal (Phase 2)
 
 **Status:** Proposal for review. **No Go code is written until this document is approved.**
 
@@ -53,7 +53,7 @@
         └───────────────┬───────────────────────────────────────────────────────────────────────┘
                          │ HTTPS (pinned keep-alive conns)
                          ▼
-                 MT5 Manager Web API  (tradeapp.opofinance.com:443)
+                 MT5 Manager Web API  (mt5.example.com:443)
 
    Shared state:  Redis Cluster (WS session registry, hot tick cache, JWT revocation, dist. rate-limit, dist. locks)
                   PostgreSQL 16 (trading_ops/audit)  +  TimescaleDB (OHLC hypertables)
@@ -83,7 +83,7 @@ backend/
 │   │   └── response/              # GlobalResponse envelope + Ok/BadRequest helpers (exact shape & status codes)
 │   ├── auth/
 │   │   ├── jwt.go                 # HS256 issue/validate, claims (accounts/name) — parity-exact
-│   │   └── crm.go                 # OpoFinance CRM login + account discovery
+│   │   └── crm.go                 # TradePlatform CRM login + account discovery
 │   ├── mt5/
 │   │   ├── session.go             # SessionManager: pool of authenticated conns, ping, re-auth, failure tracking
 │   │   ├── client.go              # low-level HTTP caller (pinned keep-alive transport, cookie jar, retry)
@@ -193,7 +193,7 @@ Total third-party surface is small and all are widely-used, actively-maintained 
 
 **6.4 `/ws` contract.** Same URL `/ws`, same query params, same `TP`(1–4)+`methodtype` dispatch table (ANALYSIS §6.1), same serialized-`data` text frames, same ~3s cadence, the `from==0 && to==1` live-window trick preserved in `transform`/tick logic. (Hardened default: JWT now required pre-accept — see §9/Compat note, gated by `WS_REQUIRE_AUTH`, default ON per decision #3, can be set OFF for exact legacy parity.)
 
-**6.5 Parity test harness.** `test/golden/` stores real captured responses from the running .NET service (via the existing `testing/OpoMTSocket.postman_collection.json` + `smoke-test.sh`). A Go test replays each request against a mocked MT5 upstream (recorded fixtures) and asserts the Go output equals the golden bytes (modulo volatile fields like timestamps, which are asserted structurally). This is the objective gate for "behavior identical."
+**6.5 Parity test harness.** `test/golden/` stores real captured responses from the running .NET service (via the existing `testing/LegacyMTSocket.postman_collection.json` + `smoke-test.sh`). A Go test replays each request against a mocked MT5 upstream (recorded fixtures) and asserts the Go output equals the golden bytes (modulo volatile fields like timestamps, which are asserted structurally). This is the objective gate for "behavior identical."
 
 ---
 
@@ -215,7 +215,7 @@ Total third-party surface is small and all are widely-used, actively-maintained 
 
 **7.3 Connections.** `pgxpool` sized from config; statements via sqlc. Two logical databases/schemas: `market` (Timescale, OHLC) and `trading_ops` (audit/logs/jobs). River uses its own tables in `trading_ops`.
 
-**7.4 Migration of existing data.** A one-shot migration job copies existing `OpoFinance` price-history into Timescale (out of scope for code parity, planned as an ops runbook). Until cut-over, an optional dual-write/read-through can be enabled.
+**7.4 Migration of existing data.** A one-shot migration job copies existing `TradePlatform` price-history into Timescale (out of scope for code parity, planned as an ops runbook). Until cut-over, an optional dual-write/read-through can be enabled.
 
 ---
 
@@ -274,9 +274,9 @@ Single-binary all-roles mode is usable from step 4; role-split for the 1M target
 
 ## 12. Open Questions for Approval
 
-1. **MT5 manager concurrency:** may we open `N>1` concurrent authenticated manager sessions to `tradeapp.opofinance.com` (broker-side limit?), or must we keep `N=1` and scale only the fan-out? (Default `N=1` until confirmed.)
+1. **MT5 manager concurrency:** may we open `N>1` concurrent authenticated manager sessions to `mt5.example.com` (broker-side limit?), or must we keep `N=1` and scale only the fan-out? (Default `N=1` until confirmed.)
 2. **Legacy parity switches:** confirm the hardened defaults in §9/#6 are acceptable as **defaults ON** (clients may need the no-password login or unauthenticated `/ws` during transition — those remain available via config). Any client we must not break?
-3. **Timescale cut-over:** is migrating existing `OpoFinance` price history required for v1, or can v1 start fresh and backfill later?
+3. **Timescale cut-over:** is migrating existing `TradePlatform` price history required for v1, or can v1 start fresh and backfill later?
 4. **WS cadence:** keep the exact 3s push, or is a faster/configurable cadence (e.g. on-tick push from NATS) acceptable as long as the message shape is unchanged?
 
 ---

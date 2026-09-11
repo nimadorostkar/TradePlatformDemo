@@ -5,7 +5,7 @@
 #   Go gateway       127.0.0.1:5063   (backend/.env.mock)
 #   web terminal     http://localhost:3100  (Vite; proxies /gateway and /crm)
 #
-# Sign in with  trader@opofinance.com / correct-password  (mock CRM users).
+# Sign in with  trader@example.com / correct-password  (mock CRM users).
 # Ctrl-C stops all three. Logs go to .dev-logs/.
 set -euo pipefail
 
@@ -50,7 +50,7 @@ for _ in $(seq 1 60); do curl -fsS http://localhost:3100/ >/dev/null 2>&1 && bre
 cat <<MSG
 
   ✔ running — open http://localhost:3100
-    sign in: trader@opofinance.com / correct-password
+    sign in: trader@example.com / correct-password
     logs:    $LOGS/{mockmt5,gateway,vite}.log
 
 MSG

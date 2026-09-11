@@ -33,7 +33,7 @@ const journalDocumentSchema = z.object({
   entries: z.array(journalEntrySchema).max(2000),
 });
 
-const STORAGE_KEY = 'opotrade.journal.v1';
+const STORAGE_KEY = 'tradeplatform.journal.v1';
 
 function load(storage: Storage | null): JournalEntry[] {
   if (!storage) return [];

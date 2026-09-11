@@ -17,7 +17,7 @@ import type { SessionTokens } from './auth-session';
  * readable by any script in the origin.
  *
  * The token no longer reaches any URL. WebSocket authentication moved to the
- * `opotrade.jwt.<JWT>` subprotocol, so the credential is not in the connect
+ * `tradeplatform.jwt.<JWT>` subprotocol, so the credential is not in the connect
  * URL, browser history, referrers, or proxy access logs.
  */
 

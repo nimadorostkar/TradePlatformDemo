@@ -92,7 +92,7 @@ describe('a draft that outlives the ticket', () => {
 describe('a draft that outlives a reload', () => {
   /** Boots a fresh store module against a given sessionStorage payload. */
   async function reboot(payload: unknown) {
-    sessionStorage.setItem('opotrade.order-draft', JSON.stringify(payload));
+    sessionStorage.setItem('tradeplatform.order-draft', JSON.stringify(payload));
     vi.resetModules();
     return (await import('./order-draft-store')).useOrderDraft;
   }
@@ -160,7 +160,7 @@ describe('a draft that outlives a reload', () => {
   });
 
   it('starts empty rather than throwing when the stored draft is junk', async () => {
-    sessionStorage.setItem('opotrade.order-draft', '{not json');
+    sessionStorage.setItem('tradeplatform.order-draft', '{not json');
     vi.resetModules();
     const store = (await import('./order-draft-store')).useOrderDraft;
     expect(store.getState().kind).toBe('market');
@@ -180,13 +180,13 @@ describe('a draft that outlives a reload', () => {
   });
 
   it('mirrors every change so the next reload has something to restore', async () => {
-    sessionStorage.removeItem('opotrade.order-draft');
+    sessionStorage.removeItem('tradeplatform.order-draft');
     vi.resetModules();
     const store = (await import('./order-draft-store')).useOrderDraft;
     store.getState().adoptSymbol('EURUSD');
     store.getState().set({ kind: 'stop', price: '1.16759' });
 
-    const written = JSON.parse(sessionStorage.getItem('opotrade.order-draft')!);
+    const written = JSON.parse(sessionStorage.getItem('tradeplatform.order-draft')!);
     expect(written).toMatchObject({ kind: 'stop', price: '1.16759', symbol: 'EURUSD' });
   });
 });

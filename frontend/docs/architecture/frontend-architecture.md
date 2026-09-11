@@ -111,7 +111,7 @@ We do not describe any browser storage as "secure". The honest position:
   eliminate the risk; it reduces it.
 - The token is **not** in any URL. A browser `WebSocket` constructor cannot set
   an `Authorization` header, so the credential travels as the
-  `opotrade.jwt.<JWT>` subprotocol; the gateway negotiates only `opotrade.v1`,
+  `tradeplatform.jwt.<JWT>` subprotocol; the gateway negotiates only `tradeplatform.v1`,
   so it is never echoed back. This keeps the JWT out of connect URLs, browser
   history, referrers, and proxy access logs, as well as out of every log,
   diagnostic, and UI surface.

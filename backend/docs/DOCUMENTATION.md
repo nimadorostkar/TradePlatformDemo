@@ -1,4 +1,4 @@
-# OpoMTSocket Go Gateway — Complete Documentation
+# LegacyMTSocket Go Gateway — Complete Documentation
 
 A single, comprehensive reference for the project: what it is, how it's built,
 how it works, the full API, optimizations, infrastructure, Docker, and how to run
@@ -6,20 +6,9 @@ and verify it. Detailed sub-documents are linked where deeper coverage exists.
 
 > Diagrams use Mermaid (rendered by GitHub). The detailed docs:
 > [TECH_PLAN](TECH_PLAN.md) · [ARCHITECTURE](ARCHITECTURE.md) · [API](API.md) ·
-> [CONFIGURATION](CONFIGURATION.md) · [USAGE](USAGE.md) · [OPERATIONS](OPERATIONS.md) ·
-> [LAUNCH](LAUNCH.md) · [LAUNCH_VPS](LAUNCH_VPS.md) · [ANALYSIS](ANALYSIS.md) ·
-> [PARITY-NOTES](PARITY-NOTES.md) · [PRODUCTION_READINESS](PRODUCTION_READINESS.md) ·
-> [TEST_RESULTS](TEST_RESULTS.md) · [ENDPOINT_TEST_RESULTS](ENDPOINT_TEST_RESULTS.md) ·
-> [CHANGELOG](CHANGELOG.md) · [VOLUME-UNITS](VOLUME-UNITS.md).
-
-> **New here, or about to deploy?** Start with **[CHANGELOG](CHANGELOG.md)** — it
-> covers the terminal backend-requirements work, the two production issues found
-> while deploying it, and the one setting that will lock traders out if it is
-> missed.
->
-> **Before touching volumes, read [VOLUME-UNITS](VOLUME-UNITS.md).** MT5 reports
-> volume at two different scales and mixing them is silent — it has already
-> caused one outage.
+> [CONFIGURATION](CONFIGURATION.md) · [USAGE](USAGE.md) · [ANALYSIS](ANALYSIS.md) ·
+> [PARITY-NOTES](PARITY-NOTES.md) · [TEST_RESULTS](TEST_RESULTS.md) ·
+> [ENDPOINT_TEST_RESULTS](ENDPOINT_TEST_RESULTS.md) · [VOLUME-UNITS](VOLUME-UNITS.md).
 
 ## Table of contents
 1. [Overview](#1-overview)
@@ -44,10 +33,10 @@ and verify it. Detailed sub-documents are linked where deeper coverage exists.
 
 ## 1. Overview
 
-OpoMTSocket-Go is a **stateful API gateway** between OpoFinance client apps (web,
+TradePlatform gateway is a **stateful API gateway** between TradePlatform client apps (web,
 TradingView UI, console) and the **MetaTrader 5 Manager Web API**
-(`tradeapp.opofinance.com`). It is a faithful Go reimplementation of the .NET 8
-`OpoMTSocket` service, exposing the MT5 API as **REST endpoints** and a
+(`mt5.example.com`). It is a faithful Go reimplementation of the .NET 8
+`LegacyMTSocket` service, exposing the MT5 API as **REST endpoints** and a
 **`/ws` streaming endpoint**, and is designed to scale to ~1,000,000 users.
 
 **Prime directive:** external behavior (routes, payloads incl. exact JSON
@@ -92,8 +81,8 @@ flowchart TB
     NATS[(NATS — optional<br/>cross-pod WS fan-out)]
   end
 
-  MT5[(MT5 Manager Web API<br/>tradeapp.opofinance.com)]
-  CRM[(OpoFinance CRM)]
+  MT5[(MT5 Manager Web API<br/>mt5.example.com)]
+  CRM[(TradePlatform CRM)]
 
   web & con -->|HTTPS / WSS + JWT| R
   R --> H --> D
@@ -260,8 +249,8 @@ An interactive console is at **`/swagger`**.
 
 ## 5. WebSocket
 
-`GET /ws?...` — JWT via browser subprotocol `opotrade.jwt.<jwt>` (alongside
-`opotrade.v1`) or a Bearer header when `WS_REQUIRE_AUTH=true`. Legacy query-token
+`GET /ws?...` — JWT via browser subprotocol `tradeplatform.jwt.<jwt>` (alongside
+`tradeplatform.v1`) or a Bearer header when `WS_REQUIRE_AUTH=true`. Legacy query-token
 support is controlled by `WS_ALLOW_QUERY_TOKEN`. **Subscription = query string.** Params: `symbol, id,
 methodtype, group, login, offset, total, ticket, TP, source, fromtime, totime,
 data`.
@@ -279,7 +268,7 @@ The server pushes the serialized `data` field (not the envelope) every
 ```js
 new WebSocket(
   'wss://host/ws?symbol=EURUSD&id=0&methodtype=GetQuotes&TP=1&source=tv',
-  ['opotrade.v1', `opotrade.jwt.${token}`],
+  ['tradeplatform.v1', `tradeplatform.jwt.${token}`],
 );
 # < [{"symbolname":"EURUSD","status":"Ok","bid":1.0854,"ask":1.0856,"lastprice":1.0854,"volume":12}]
 ```
@@ -386,43 +375,11 @@ Ingestion uses pgx **`CopyFrom`** into a staging table, then
 
 ## 9. Infrastructure & deployment
 
-The gateway is **one static binary**. Three deployment shapes are supported; the
-**production deployment is native Windows** (no Docker on that VPS).
-
-```mermaid
-flowchart TB
-  subgraph vps["VPS 46.62.247.67 — Windows Server 2022 (production)"]
-    net[Internet]
-    dotnet[".NET gateway<br/>scheduled task<br/>:5063 (unchanged)"]
-    go["Go gateway (gateway.exe)<br/>scheduled task OpoGatewayGo<br/>:5070, 60s start delay"]
-    pg[("PostgreSQL 16<br/>service auto-start<br/>localhost:5432")]
-    sql[("SQL Server 2025<br/>(.NET only, untouched)")]
-    net -->|TCP 5063| dotnet
-    net -->|TCP 5070| go
-    go --> pg
-    dotnet --> sql
-  end
-  go -->|HTTPS, whitelisted IP| broker[(MT5 broker)]
-  dotnet -->|HTTPS| broker
-```
-
-- **Coexistence:** the Go gateway runs on **5070**, the .NET service keeps
-  **5063**, untouched. They share the **same JWT secret** so a token works on
-  both (smooth parallel running / gradual cutover).
-- **Persistence:** Postgres is an auto-start service; the gateway is a scheduled
-  task (`onstart`, SYSTEM, 60 s delay so the DB is ready first). Both survive
-  reboot.
-- **Files:** `C:\opomtsocket-go\` (`gateway.exe`, `run.ps1`, ACL-protected
-  `gateway.env`, `logs\gateway.log`),
-  `C:\PostgreSQL\` (binaries + data).
-- **Scripts (in repo):** `deploy/windows/install-postgresql.ps1`,
-  `setup-service.ps1`, `run.ps1`, `gateway.env.example`, `protect-config.ps1`,
-  [`deploy/windows/README.md`](../deploy/windows/README.md).
-
-For Linux/k8s: per-role scaling (api/ws/poller/mt5/jobs), HPA, NATS backplane,
-Redis — see [`deploy/k8s/`](../deploy/k8s/README.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
-
----
+The gateway is **one static binary** (`deploy/docker/Dockerfile`, distroless).
+The repository-level deployment — edge nginx + prebuilt terminal + gateway +
+mock upstream on one Docker host — lives in `../../deploy/` and is driven by
+`deploy/deploy.sh`; see the root README. `deploy/compose/docker-compose.yml`
+is the local stack with PostgreSQL/TimescaleDB, Redis and NATS.
 
 ## 10. Docker
 
@@ -475,14 +432,6 @@ make run                   # :5063 by default
 make compose-up            # gateway + Postgres/Timescale + Redis + NATS
 ```
 
-**Production VPS (native Windows):** see [`deploy/windows/README.md`](../deploy/windows/README.md):
-```powershell
-# on a dev box: make build-windows  -> bin\gateway.exe (copy to C:\opomtsocket-go\)
-.\install-postgresql.ps1 -PgSuperPassword '...' -OpoPassword '...'
-copy gateway.env.example gateway.env  # fill production values
-.\protect-config.ps1 -Config C:\opomtsocket-go\gateway.env
-.\setup-service.ps1                  # firewall + durable task + start
-```
 
 ---
 
@@ -522,11 +471,8 @@ Results: [TEST_RESULTS.md](TEST_RESULTS.md), [ENDPOINT_TEST_RESULTS.md](ENDPOINT
 - **Secrets:** via env (never logged); the production VPS keeps them in an
   ACL-protected `gateway.env` readable only by `SYSTEM` and Administrators;
   PostgreSQL listens on **localhost only** (not exposed).
-- **Production audit:** [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) (all
-  findings resolved, incl. a WS-hijack 501 bug and the live string-number bug).
 - **Coexistence note:** while running beside .NET, auth/CORS are intentionally
   loosened (shared token compatibility). Harden after cutover — see
-  [LAUNCH_VPS.md](LAUNCH_VPS.md).
 
 ---
 
@@ -545,7 +491,7 @@ Results: [TEST_RESULTS.md](TEST_RESULTS.md), [ENDPOINT_TEST_RESULTS.md](ENDPOINT
 
 ## 16. Operations & troubleshooting
 
-Metrics, failure modes, and tuning: [OPERATIONS.md](OPERATIONS.md). Common cases:
+Common cases:
 
 | Symptom | Cause | Fix |
 |---|---|---|

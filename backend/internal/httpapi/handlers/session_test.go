@@ -54,9 +54,9 @@ func TestLogin_SetsHardenedSessionCookies(t *testing.T) {
 		t.Fatalf("login status = %d", w.Code)
 	}
 	res := w.Result()
-	session := cookieByName(res, "opotrade_session")
+	session := cookieByName(res, "tradeplatform_session")
 	if session == nil || session.Value == "" {
-		t.Fatal("no opotrade_session cookie set at login")
+		t.Fatal("no tradeplatform_session cookie set at login")
 	}
 	if !session.HttpOnly || !session.Secure || session.SameSite != http.SameSiteLaxMode || session.Path != "/" {
 		t.Errorf("session cookie not hardened: %+v", session)
@@ -67,10 +67,10 @@ func TestLogin_SetsHardenedSessionCookies(t *testing.T) {
 	if session.MaxAge != int(time.Hour/time.Second) {
 		t.Errorf("cookie MaxAge %d does not match the configured restore window", session.MaxAge)
 	}
-	if crm := cookieByName(res, "opotrade_crm"); crm == nil || crm.Value == "" || !crm.HttpOnly {
+	if crm := cookieByName(res, "tradeplatform_crm"); crm == nil || crm.Value == "" || !crm.HttpOnly {
 		t.Error("CRM token cookie missing or script-readable")
 	}
-	if persist := cookieByName(res, "opotrade_persist"); persist == nil || persist.Value != "1" {
+	if persist := cookieByName(res, "tradeplatform_persist"); persist == nil || persist.Value != "1" {
 		t.Error("remembered login must set the persist marker for the /session re-mint")
 	}
 }
@@ -88,15 +88,15 @@ func TestLogin_WithoutRememberIsSessionOnly(t *testing.T) {
 		t.Fatalf("login status = %d", w.Code)
 	}
 	res := w.Result()
-	session := cookieByName(res, "opotrade_session")
+	session := cookieByName(res, "tradeplatform_session")
 	if session == nil || session.Value == "" {
-		t.Fatal("no opotrade_session cookie set at login")
+		t.Fatal("no tradeplatform_session cookie set at login")
 	}
 	if session.MaxAge != 0 || !session.Expires.IsZero() {
 		t.Errorf("un-remembered session cookie must be browser-session-only, got MaxAge=%d Expires=%v",
 			session.MaxAge, session.Expires)
 	}
-	if persist := cookieByName(res, "opotrade_persist"); persist != nil {
+	if persist := cookieByName(res, "tradeplatform_persist"); persist != nil {
 		t.Error("persist marker must not be set without Remember")
 	}
 }
@@ -147,13 +147,13 @@ func TestSession_NoCookieIs204(t *testing.T) {
 func TestSession_GarbageCookieIs401AndCleared(t *testing.T) {
 	a := sessionAPI(t, "http://crm.invalid")
 	r := httptest.NewRequest(http.MethodGet, "/api/Authentication/session", nil)
-	r.AddCookie(&http.Cookie{Name: "opotrade_session", Value: "not-a-jwt"})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_session", Value: "not-a-jwt"})
 	w := httptest.NewRecorder()
 	a.Session(w, r)
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", w.Code)
 	}
-	cleared := cookieByName(w.Result(), "opotrade_session")
+	cleared := cookieByName(w.Result(), "tradeplatform_session")
 	if cleared == nil || cleared.MaxAge != -1 {
 		t.Error("an invalid session cookie must be cleared, not re-presented forever")
 	}
@@ -169,9 +169,9 @@ func TestSession_ExpiredJWTIsRemintedFromCRMCookie(t *testing.T) {
 	a := sessionAPI(t, crm.URL)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/Authentication/session", nil)
-	r.AddCookie(&http.Cookie{Name: "opotrade_session", Value: "expired-or-rotated-jwt"})
-	r.AddCookie(&http.Cookie{Name: "opotrade_crm", Value: cookieEncode("crm-token-value")})
-	r.AddCookie(&http.Cookie{Name: "opotrade_user", Value: cookieEncode("alice@example.com")})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_session", Value: "expired-or-rotated-jwt"})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_crm", Value: cookieEncode("crm-token-value")})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_user", Value: cookieEncode("alice@example.com")})
 	w := httptest.NewRecorder()
 	a.Session(w, r)
 
@@ -184,7 +184,7 @@ func TestSession_ExpiredJWTIsRemintedFromCRMCookie(t *testing.T) {
 	}
 	// The fresh token must also replace the stored cookie, or every later
 	// restore repeats the slow CRM exchange.
-	set := cookieByName(w.Result(), "opotrade_session")
+	set := cookieByName(w.Result(), "tradeplatform_session")
 	if set == nil || set.Value == "" || set.Value == "expired-or-rotated-jwt" {
 		t.Error("re-mint did not refresh the session cookie")
 	}
@@ -199,15 +199,15 @@ func TestSession_ExpiredJWTWithDeadCRMIs401(t *testing.T) {
 	a := sessionAPI(t, crm.URL)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/Authentication/session", nil)
-	r.AddCookie(&http.Cookie{Name: "opotrade_session", Value: "expired-jwt"})
-	r.AddCookie(&http.Cookie{Name: "opotrade_crm", Value: cookieEncode("revoked-crm-token")})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_session", Value: "expired-jwt"})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_crm", Value: cookieEncode("revoked-crm-token")})
 	w := httptest.NewRecorder()
 	a.Session(w, r)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", w.Code)
 	}
-	if c := cookieByName(w.Result(), "opotrade_session"); c == nil || c.MaxAge != -1 {
+	if c := cookieByName(w.Result(), "tradeplatform_session"); c == nil || c.MaxAge != -1 {
 		t.Error("a dead session must clear its cookies")
 	}
 }
@@ -224,8 +224,8 @@ func TestSession_TransientCRMFailureKeepsTheCookies(t *testing.T) {
 	a := sessionAPI(t, crm.URL)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/Authentication/session", nil)
-	r.AddCookie(&http.Cookie{Name: "opotrade_session", Value: "expired-jwt"})
-	r.AddCookie(&http.Cookie{Name: "opotrade_crm", Value: cookieEncode("still-good-crm-token")})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_session", Value: "expired-jwt"})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_crm", Value: cookieEncode("still-good-crm-token")})
 	w := httptest.NewRecorder()
 	a.Session(w, r)
 
@@ -247,8 +247,8 @@ func TestSession_UnreachableCRMKeepsTheCookies(t *testing.T) {
 	a := sessionAPI(t, "http://127.0.0.1:1") // connection refused
 
 	r := httptest.NewRequest(http.MethodGet, "/api/Authentication/session", nil)
-	r.AddCookie(&http.Cookie{Name: "opotrade_session", Value: "expired-jwt"})
-	r.AddCookie(&http.Cookie{Name: "opotrade_crm", Value: cookieEncode("still-good-crm-token")})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_session", Value: "expired-jwt"})
+	r.AddCookie(&http.Cookie{Name: "tradeplatform_crm", Value: cookieEncode("still-good-crm-token")})
 	w := httptest.NewRecorder()
 	a.Session(w, r)
 
@@ -271,7 +271,7 @@ func TestLogout_ClearsEverySessionCookie(t *testing.T) {
 		t.Fatalf("status = %d", w.Code)
 	}
 	res := w.Result()
-	for _, name := range []string{"opotrade_session", "opotrade_crm", "opotrade_user"} {
+	for _, name := range []string{"tradeplatform_session", "tradeplatform_crm", "tradeplatform_user"} {
 		c := cookieByName(res, name)
 		if c == nil || c.MaxAge != -1 {
 			t.Errorf("cookie %s not cleared on logout", name)

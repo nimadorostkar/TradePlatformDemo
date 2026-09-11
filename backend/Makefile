@@ -1,4 +1,4 @@
-# OpoMTSocket-Go — developer tasks.
+# TradePlatform gateway — developer tasks.
 
 BINARY      := gateway
 PKG         := ./...

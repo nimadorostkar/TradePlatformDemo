@@ -1,4 +1,4 @@
-// Command gateway is the OpoMTSocket-Go entrypoint.
+// Command gateway is the TradePlatform gateway entrypoint.
 //
 // It loads configuration, builds the logger, MT5 session manager, auth, and HTTP
 // surface, starts the server, and shuts down gracefully on SIGINT/SIGTERM. The
@@ -310,7 +310,7 @@ func run() error {
 	// misconfiguration is otherwise silent until a shared lockout is observed.
 	if len(cfg.RateLimit.TrustedProxies) == 0 &&
 		(cfg.RateLimit.LoginThreshold > 0 || cfg.RateLimit.RPS > 0) {
-		log.Warn("RATE_LIMIT_TRUSTED_PROXIES is empty while a limiter/login throttle is enabled: requests are keyed by TCP peer, so behind a reverse proxy ALL clients share one bucket (site-wide lockout). Set it to loopback plus the proxy's ranges — see deploy/windows/apply-cloudflare-trusted-proxies.ps1",
+		log.Warn("RATE_LIMIT_TRUSTED_PROXIES is empty while a limiter/login throttle is enabled: requests are keyed by TCP peer, so behind a reverse proxy ALL clients share one bucket (site-wide lockout). Set it to loopback plus the proxy's ranges",
 			slog.Int("login_threshold", cfg.RateLimit.LoginThreshold),
 			slog.Float64("rate_limit_rps", cfg.RateLimit.RPS))
 	}

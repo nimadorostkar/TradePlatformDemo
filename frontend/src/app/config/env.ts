@@ -35,7 +35,7 @@ const envSchema = z.object({
   VITE_CRM_HTTP_URL: httpUrl,
   VITE_TRADINGVIEW_LIBRARY_PATH: z.string().default('/charting_library/'),
   VITE_BRAND_CONFIG_URL: z.string().optional(),
-  VITE_DEFAULT_TIMEZONE: z.string().default('Europe/Istanbul'),
+  VITE_DEFAULT_TIMEZONE: z.string().default('Etc/UTC'),
   // Omission must be distinguishable from an explicit false: in production,
   // the fail-safe default is to require confirmation before real money moves.
   VITE_CONFIRM_TRADES: z.string().optional(),

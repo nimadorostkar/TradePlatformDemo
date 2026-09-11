@@ -39,11 +39,11 @@ interface StoredChartTemplate {
 }
 
 const KEYS = {
-  charts: 'opotrade.tv.charts',
-  studyTemplates: 'opotrade.tv.studyTemplates',
-  drawingTemplates: 'opotrade.tv.drawingTemplates',
-  chartTemplates: 'opotrade.tv.chartTemplates',
-  drawings: 'opotrade.tv.drawings',
+  charts: 'tradeplatform.tv.charts',
+  studyTemplates: 'tradeplatform.tv.studyTemplates',
+  drawingTemplates: 'tradeplatform.tv.drawingTemplates',
+  chartTemplates: 'tradeplatform.tv.chartTemplates',
+  drawings: 'tradeplatform.tv.drawings',
 } as const;
 
 /**

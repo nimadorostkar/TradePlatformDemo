@@ -3,7 +3,7 @@
 Verified against source, not documentation. Every row cites the file that
 produces the behaviour, in these repositories:
 
-- `GATEWAY` = `/Users/nima/Projects/opotrade-mt-socket-new` (Go OpoMTSocket)
+- `GATEWAY` = `/Users/nima/Projects/tradeplatform-mt-socket-new` (Go LegacyMTSocket)
 - `TV` = `/Users/nima/Projects/trading-view-integration` (working integration)
 
 Audited 2026-07-30.
@@ -96,8 +96,8 @@ hardcoded MT5 requests (`Login=1010` / `1020` — `domain/trade.go#PlaceOrderTV`
 
 The subscription **is** the connect-URL query string. There is no
 subscribe/unsubscribe message protocol (`GATEWAY/internal/realtime/ws.go`).
-Browser auth uses two WebSocket subprotocols: `opotrade.v1` and
-`opotrade.jwt.<JWT>`. The server negotiates only `opotrade.v1`, so the credential
+Browser auth uses two WebSocket subprotocols: `tradeplatform.v1` and
+`tradeplatform.jwt.<JWT>`. The server negotiates only `tradeplatform.v1`, so the credential
 is not echoed and never appears in the URL. The server pushes
 `JSON.stringify(envelope.data)` — the bare data, not the envelope.
 

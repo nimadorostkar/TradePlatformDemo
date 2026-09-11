@@ -3,7 +3,7 @@ import { TradingError } from '@/domain/common/errors';
 
 /**
  * The gateway envelope, verified against
- * `internal/httpapi/response/response.go` in opotrade-mt-socket-new:
+ * `internal/httpapi/response/response.go` in tradeplatform-mt-socket-new:
  *
  *   { data: any, errorMessage: string|null, message: string|null, success: bool }
  *
