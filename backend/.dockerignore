@@ -1,0 +1,13 @@
+.git
+bin/
+dist/
+*.tar.gz
+*.env
+.env
+.env.*
+!.env.example
+deploy/docker/gateway
+docs/
+testing/
+architecture-obsidian/
+**/*_test.go

@@ -1,0 +1,25 @@
+# Production (VPS) — Go gateway only, API-only, running ALONGSIDE the .NET
+# service. Host port 5070 (the .NET gateway keeps 5063). No DB/Redis/NATS.
+#
+# Default: builds the image from source (needs Docker + internet on the VPS).
+# Offline alternative: build the prebuilt image and set `image:` only — see
+# docs/LAUNCH_VPS.md.
+services:
+  gateway:
+    build:
+      context: ../..                      # repo root
+      dockerfile: deploy/docker/Dockerfile
+    image: opotrade-gateway:prod
+    container_name: opotrade-gateway-go
+    restart: unless-stopped
+    ports:
+      - "5070:5063"          # host:container — .NET keeps 5063, Go on 5070
+    env_file:
+      - .env.prod
+    # distroless has no shell, so health is checked from the host:
+    #   curl http://localhost:5070/readyz
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,20 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Claude Code local state (per-machine permissions, worktrees)
+.claude/
+
+# Local env / secrets — each package also ignores its own .env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Sub-package specifics (node_modules, dist, bin, licensed TradingView assets,
+# Go build outputs, …) are covered by frontend/.gitignore and backend/.gitignore.

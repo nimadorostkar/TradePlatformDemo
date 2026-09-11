@@ -1,0 +1,59 @@
+# Single role-gated Deployment running ROLES=all. Each replica holds its own MT5
+# session; the price-history job is safe across replicas via the PG advisory
+# lock (only one fires). To split roles for scale, copy this Deployment with a
+# ROLES override (api / ws / poller / jobs) — no image change. See README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opotrade-gateway
+  labels:
+    app: opotrade-gateway
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: opotrade-gateway
+  template:
+    metadata:
+      labels:
+        app: opotrade-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: gateway
+          image: ghcr.io/nimadorostkar/tradeplatformdemo-gateway:latest
+          ports:
+            - name: http
+              containerPort: 5063
+            - name: metrics
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: opotrade-gateway-config
+            - secretRef:
+                name: opotrade-gateway-secret
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "128Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+      terminationGracePeriodSeconds: 30

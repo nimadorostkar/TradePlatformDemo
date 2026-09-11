@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: opotrade-gateway
+  labels:
+    app: opotrade-gateway
+spec:
+  type: ClusterIP
+  # ClientIP affinity keeps a WebSocket client pinned to one pod (the in-process
+  # hub is per-pod until the NATS cross-pod backplane is enabled).
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  selector:
+    app: opotrade-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

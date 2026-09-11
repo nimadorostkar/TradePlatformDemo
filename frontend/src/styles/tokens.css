@@ -1,0 +1,134 @@
+/**
+ * Semantic design tokens.
+ *
+ * Feature components consume ONLY these variables — never a literal broker
+ * colour. `--brand-primary` / `--brand-secondary` are overwritten at runtime by
+ * the validated BrandConfig (see src/app/config/brand.ts), which is how one
+ * build serves multiple brokers.
+ *
+ * Both themes are authored to meet WCAG AA for body text and UI controls
+ * against their own surfaces.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --background-primary: #080b10;
+  --background-secondary: #0d1117;
+  --background-tertiary: #131922;
+  --surface-raised: #182031;
+  --surface-overlay: #1c2536;
+
+  --border-default: #202735;
+  --border-strong: #2e3849;
+
+  --text-primary: #f4f7fb;
+  --text-secondary: #9aa4b2;
+  /* 4.66:1 on the raised surface and better on every darker one — the old
+     #697586 measured 4.21:1 against the primary background and failed AA
+     everywhere this token is used (HGH-04). */
+  --text-muted: #7e8a9d;
+
+  /* Held as CHANNELS so a Tailwind opacity modifier can reach them. Tailwind 3
+     silently emits nothing for an opacity modifier on an arbitrary var()
+     colour — `bg-[var(--negative)]/10` compiles to no rule at all — so every
+     tinted callout and badge in the terminal was rendering fully transparent.
+     Registered in tailwind.config.js as rgb(var(--x-rgb) / <alpha-value>),
+     which makes `bg-negative/10` a real rule. The flat token stays for the
+     many places that want the colour at full strength. */
+  --positive-rgb: 22 199 132;
+  --negative-rgb: 234 57 67;
+  --warning-rgb: 245 165 36;
+  --info-rgb: 56 189 248;
+
+  --positive: rgb(var(--positive-rgb));
+  --negative: rgb(var(--negative-rgb));
+  --warning: rgb(var(--warning-rgb));
+  --info: rgb(var(--info-rgb));
+
+  --positive-flash: rgb(22 199 132 / 22%);
+  --negative-flash: rgb(234 57 67 / 22%);
+
+  /* Standing washes, for a surface that is PERMANENTLY one side of a market —
+     the two halves of a ladder — as opposed to the flashes above, which mark a
+     tick and fade. Far fainter than a flash on purpose: a wash that competes
+     with a flash makes the moving thing the harder one to see.
+
+     These exist as tokens because Tailwind 3 silently emits NOTHING for an
+     opacity modifier on an arbitrary var() colour: `bg-[var(--negative)]/10`
+     compiles to no rule at all, so the tint just never appears. */
+  --positive-wash: rgb(var(--positive-rgb) / 7%);
+  --negative-wash: rgb(var(--negative-rgb) / 7%);
+  --negative-notice: rgb(var(--negative-rgb) / 12%);
+
+  /* 51 102 238 = #3366ee: white text on the primary button reads 4.91:1,
+     where the old 55 114 255 sat at 4.19:1 — below AA on the single most
+     important control in the product (HGH-04). Same hue, slightly deeper. */
+  --brand-primary-rgb: 51 102 238;
+  --brand-primary: rgb(var(--brand-primary-rgb));
+  --brand-secondary: #6c8cff;
+  --brand-primary-contrast: #ffffff;
+
+  --focus-ring: #7aa2ff;
+
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --background-primary: #f6f8fb;
+  --background-secondary: #ffffff;
+  --background-tertiary: #eef2f7;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+
+  --border-default: #dbe2ec;
+  --border-strong: #c2ccdb;
+
+  --text-primary: #0d1520;
+  --text-secondary: #4a5769;
+  /* 4.88:1 on the tertiary surface, 5.16:1 on the primary — the old #6b7889
+     measured 4.22:1 on the app background and failed AA (HGH-04). */
+  --text-muted: #5d6a7e;
+
+  /* Darkened against the light surface so P/L text still clears AA. */
+  --positive-rgb: 10 143 93;
+  --negative-rgb: 195 31 43;
+  --warning-rgb: 169 106 4;
+  --info-rgb: 3 105 161;
+
+  --positive: rgb(var(--positive-rgb));
+  --negative: rgb(var(--negative-rgb));
+  --warning: rgb(var(--warning-rgb));
+  --info: rgb(var(--info-rgb));
+
+  --positive-flash: rgb(10 143 93 / 14%);
+  --negative-flash: rgb(195 31 43 / 14%);
+
+  --positive-wash: rgb(var(--positive-rgb) / 6%);
+  --negative-wash: rgb(var(--negative-rgb) / 6%);
+  --negative-notice: rgb(var(--negative-rgb) / 10%);
+
+  --brand-primary-rgb: 47 95 224;
+  --brand-primary: rgb(var(--brand-primary-rgb));
+  --brand-secondary: #4a76ea;
+  --brand-primary-contrast: #ffffff;
+
+  --focus-ring: #2f5fe0;
+
+  --shadow-panel: 0 4px 16px rgb(15 26 43 / 12%);
+}
+
+/* Density affects table/list row height only; it never changes font size below
+   the readable minimum. */
+:root {
+  --row-height: 1.875rem;
+}
+:root[data-density='compact'] {
+  --row-height: 1.5rem;
+}
+:root[data-density='relaxed'] {
+  --row-height: 2.25rem;
+}

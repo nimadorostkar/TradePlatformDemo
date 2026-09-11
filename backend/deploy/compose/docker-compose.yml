@@ -1,0 +1,63 @@
+# Local development stack: gateway + TimescaleDB/Postgres + Redis + NATS.
+# Usage: make compose-up   (or: docker compose -f deploy/compose/docker-compose.yml up --build)
+
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "5063:5063"   # API + WS
+      - "9090:9090"   # metrics
+    environment:
+      HTTP_ADDR: ":5063"
+      ENVIRONMENT: "development"
+      JWT_SECRET_KEY: "dev-only-change-me"
+      MT5_PASSWORD: "dev-only-change-me"
+      POSTGRES_DSN: "postgres://opo:opo@postgres:5432/trading_ops?sslmode=disable"
+      TIMESCALE_DSN: "postgres://opo:opo@timescale:5432/market?sslmode=disable"
+      REDIS_ADDRS: "redis:6379"
+      NATS_URL: "nats://nats:4222"
+      LOG_FORMAT: "text"
+    depends_on:
+      - postgres
+      - timescale
+      - redis
+      - nats
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: opo
+      POSTGRES_PASSWORD: opo
+      POSTGRES_DB: trading_ops
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  timescale:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: opo
+      POSTGRES_PASSWORD: opo
+      POSTGRES_DB: market
+    ports:
+      - "5433:5432"
+    volumes:
+      - tsdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js"]   # enable JetStream
+    ports:
+      - "4222:4222"
+
+volumes:
+  pgdata:
+  tsdata:

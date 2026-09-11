@@ -1,0 +1,373 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Placeholders for the VERIFY and E2E jobs only. Those suites intercept every
+  # gateway call, so no job can reach a real trading server and none may ever
+  # place a trade.
+  #
+  # The `build` job deliberately OVERRIDES these with production values — see
+  # the comment there for why the shipped bundle must not carry them.
+  VITE_APP_ENV: development
+  VITE_GATEWAY_HTTP_URL: http://127.0.0.1:5063
+  VITE_GATEWAY_WS_URL: ws://127.0.0.1:5063
+  VITE_CRM_HTTP_URL: https://crm.invalid
+  VITE_CONFIRM_TRADES: 'true'
+  VITE_ENABLE_ONE_CLICK_TRADING: 'false'
+  VITE_APP_VERSION: ${{ github.sha }}
+
+# The terminal lives in frontend/ of the monorepo. Every `run:` step below
+# executes from there; paths handed to actions (lockfile, artifacts) are
+# repo-relative and spelled out explicitly.
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  verify:
+    name: Typecheck, lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      # The licensed TradingView package is NOT in this repository, and a pull
+      # request can edit both this workflow and the restore script — so any
+      # secret reachable from here is one a contributor can exfiltrate before
+      # review. That is why this step is skipped on pull_request entirely.
+      #
+      # It used to mean pull requests could not run AT ALL: the restore failed,
+      # and lint, typecheck and tests never executed. Shipping therefore
+      # required pushing to `main`, i.e. no review gate on a live-money
+      # terminal. Lint, typecheck and unit tests need no licensed RUNTIME — only
+      # the type declarations — so they now run against the committed
+      # `vendor/tradingview/types-shim` stand-in when the real package is
+      # absent (tsconfig resolves the real types first, the shim second).
+      #
+      # This step is therefore best-effort HERE. When it succeeds the real
+      # declarations are used and this job is authoritative; on a pull request
+      # it is skipped and the job still gives real signal.
+      #
+      - name: Restore licensed TradingView assets
+        if: github.event_name != 'pull_request'
+        env:
+          # URL-only on purpose. The tarball is served by the production origin at
+          # an unguessable token path, so fetching it involves NO credential at
+          # all — the deploy key is deploy-only again, which is what the restore
+          # script's own credential-boundary header always demanded. The SSH
+          # fallback inputs are gone WITH the DEPLOY_* fallback: reintroducing a
+          # key here means a key someone must provision deliberately.
+          TRADINGVIEW_ARTIFACT_URL: ${{ secrets.TRADINGVIEW_ARTIFACT_URL }}
+        run: scripts/restore-tradingview-ci.sh
+
+      - name: Report which declarations are in use
+        run: |
+          if [ -d vendor/tradingview/types ]; then
+            echo "Using the LICENSED declarations — this typecheck is authoritative."
+          else
+            echo "Using vendor/tradingview/types-shim — a hand-written stand-in."
+            echo "Real-contract verification happens on push to main."
+          fi
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.app.json
+
+      # Enum VALUES are invisible to both typechecks: `declare enum` has no
+      # runtime form, so a shim claiming OrderStatus.Working = 9 compiles
+      # perfectly and silently corrupts every order status the app reports.
+      - name: Shim enum values match the licensed declarations
+        if: github.event_name != 'pull_request'
+        run: npm run tv:check-shim
+
+      # Structural drift guard. With the real declarations present the shim is
+      # otherwise never exercised, so it could rot silently until the next pull
+      # request quietly lost its coverage. Typecheck against the shim too, on
+      # `push` only, and fail `main` rather than PRs when the two disagree.
+      - name: Typecheck against the shim as well
+        if: github.event_name != 'pull_request'
+        run: |
+          mv vendor/tradingview/types /tmp/tv-types-real
+          if npx tsc --noEmit -p tsconfig.app.json; then
+            status=0
+          else
+            status=1
+          fi
+          mv /tmp/tv-types-real vendor/tradingview/types
+          if [ "$status" -ne 0 ]; then
+            echo "::error::vendor/tradingview/types-shim no longer accepts this code."
+            echo "::error::Pull requests typecheck against it, so they have lost coverage."
+            echo "::error::Update the shim to match the declarations this change relies on."
+            exit 1
+          fi
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Unit and component tests
+        run: npm run test -- --coverage
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage
+          path: frontend/coverage/
+          retention-days: 7
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    needs: verify
+    # Push only, like `e2e`. A real bundle needs the licensed RUNTIME, not just
+    # its type declarations, and a pull request must not be able to reach the
+    # credential that fetches it. Leaving this on pull requests only produced a
+    # permanent red check that told a reviewer nothing about the change.
+    if: ${{ github.event_name == 'push' }}
+    # The shipped bundle must be production-configured ON ITS OWN.
+    #
+    # runtime-config.js overrides these at load time so one artifact can serve
+    # several environments — but if that file ever fails to load (a bad deploy,
+    # a stale cache, a blocked request) the app falls back to whatever was
+    # compiled in. Baking the development placeholders in would mean silently
+    # dropping to development mode against http://127.0.0.1 with the HTTPS/WSS
+    # guards disabled: the wrong failure mode for a real-money terminal.
+    #
+    # With production values compiled in, a missing runtime-config is harmless.
+    env:
+      VITE_APP_ENV: production
+      VITE_GATEWAY_HTTP_URL: ${{ vars.PUBLIC_BASE_URL }}/gateway
+      VITE_GATEWAY_WS_URL: wss://${{ vars.PUBLIC_HOST }}/gateway
+      VITE_CRM_HTTP_URL: ${{ vars.PUBLIC_BASE_URL }}/crm
+      VITE_CONFIRM_TRADES: 'true'
+      VITE_ENABLE_ONE_CLICK_TRADING: 'false'
+      VITE_ENABLE_LEGACY_AUTH_STORAGE: 'false'
+      VITE_APP_VERSION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # These values are COMPILED INTO the shipped bundle as the fallback used
+      # when runtime-config.js fails to load. A default here would not be a
+      # convenience — it would silently point a new deployment's bundle at the
+      # previous environment's gateway. Fail before anything is built.
+      - name: Require public origin configuration
+        run: |
+          : "${PUBLIC_BASE_URL:?set the repository variable PUBLIC_BASE_URL, e.g. https://terminal.example.com}"
+          : "${PUBLIC_HOST:?set the repository variable PUBLIC_HOST, e.g. terminal.example.com}"
+          case "$PUBLIC_BASE_URL" in
+            https://*) ;;
+            *) echo "FATAL: PUBLIC_BASE_URL must use https://." >&2; exit 1 ;;
+          esac
+        env:
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          PUBLIC_HOST: ${{ vars.PUBLIC_HOST }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+
+      - name: Restore licensed TradingView assets
+        env:
+          # URL-only: the tarball is served by the production origin at an
+          # unguessable token path, so no credential is involved. The deploy key
+          # is deploy-only again.
+          TRADINGVIEW_ARTIFACT_URL: ${{ secrets.TRADINGVIEW_ARTIFACT_URL }}
+        run: scripts/restore-tradingview-ci.sh
+
+      - name: Verify licensed assets are present
+        run: npm run tv:check
+
+      - run: npm run build
+
+      - name: Report bundle sizes
+        run: |
+          echo "### Bundle sizes" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          du -sh dist/assets dist/charting_library 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: frontend/dist/
+          retention-days: 7
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    needs: verify
+    if: ${{ github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+
+      - name: Restore licensed TradingView assets
+        env:
+          # URL-only: the tarball is served by the production origin at an
+          # unguessable token path, so no credential is involved. The deploy key
+          # is deploy-only again.
+          TRADINGVIEW_ARTIFACT_URL: ${{ secrets.TRADINGVIEW_ARTIFACT_URL }}
+        run: scripts/restore-tradingview-ci.sh
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright
+        run: npm run e2e
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+  deploy:
+    name: Deploy production
+    runs-on: ubuntu-latest
+    needs: [build, e2e]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+      # Site root on the deployment host. Override to relocate the install
+      # without editing this workflow.
+      DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT || 'C:/sites/opotrade-ui-new' }}
+      # Where Caddy reads its configuration on the host. UNSET means the
+      # deployment does not touch the web server at all — set it to bring the
+      # Caddy config under CI control. See docs/operations/runbook.md.
+      CADDY_CONFIG_PATH: ${{ vars.CADDY_CONFIG_PATH }}
+    steps:
+      - name: Require deployment configuration
+        run: |
+          : "${PUBLIC_BASE_URL:?set the repository variable PUBLIC_BASE_URL}"
+          : "${DEPLOY_HOST:?set the repository secret DEPLOY_HOST}"
+          : "${DEPLOY_USER:?set the repository secret DEPLOY_USER}"
+
+      # The deploy script and web server config are deployed FROM the repo, so
+      # the host stops being a place where configuration can silently drift.
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: frontend/dist
+
+      - name: Generate runtime configuration
+        env:
+          APP_VERSION: ${{ github.sha }}
+        run: |
+          cat > dist/runtime-config.js <<EOF
+          const runtimeOrigin = window.location.origin;
+          window.__RUNTIME_CONFIG__ = {
+            "VITE_APP_ENV": "production",
+            "VITE_GATEWAY_HTTP_URL": runtimeOrigin + "/gateway",
+            "VITE_GATEWAY_WS_URL": (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.host + "/gateway",
+            "VITE_CRM_HTTP_URL": runtimeOrigin + "/crm",
+            "VITE_CONFIRM_TRADES": "true",
+            "VITE_ENABLE_ONE_CLICK_TRADING": "false",
+            "VITE_ENABLE_LEGACY_AUTH_STORAGE": "false",
+            "VITE_APP_VERSION": "${APP_VERSION}",
+            "VITE_ALLOWED_HOST_ORIGINS": ""
+          };
+          EOF
+
+      - name: Package release
+        run: |
+          cd dist
+          zip -qr ../release.zip .
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
+          printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Upload release
+        env:
+          APP_VERSION: ${{ github.sha }}
+        run: |
+          scp -i ~/.ssh/id_ed25519 \
+            release.zip \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:/${DEPLOY_ROOT}/incoming/${APP_VERSION}.zip"
+
+      # Upload the deploy script BEFORE invoking it, so the host always runs
+      # the version that matches this commit. Previously it was installed by
+      # hand, which meant the workflow could pass arguments the installed copy
+      # did not understand.
+      - name: Upload deployment script
+        run: |
+          scp -i ~/.ssh/id_ed25519 \
+            deploy/windows/deploy.ps1 \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:/${DEPLOY_ROOT}/deploy.ps1"
+
+      # Deliberately NOT inside the release archive: everything under the
+      # release directory is served publicly, and a web server's own
+      # configuration must never be reachable over HTTP.
+      - name: Upload web server configuration
+        if: ${{ vars.CADDY_CONFIG_PATH != '' }}
+        env:
+          APP_VERSION: ${{ github.sha }}
+        run: |
+          scp -i ~/.ssh/id_ed25519 \
+            deploy/caddy/opotrade-ui.caddy \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:/${DEPLOY_ROOT}/incoming/${APP_VERSION}.caddy"
+
+      - name: Activate and verify release
+        env:
+          APP_VERSION: ${{ github.sha }}
+        run: |
+          # The script was uploaded from this commit in the step above, so it
+          # is safe to pass the arguments this workflow knows about.
+          #
+          # Caddy arguments are added only when CADDY_CONFIG_PATH is set. With
+          # it unset, deploy.ps1 leaves the web server untouched — the exact
+          # behaviour of every release before this one.
+          CADDY_ARGS=""
+          if [ -n "${CADDY_CONFIG_PATH}" ]; then
+            CADDY_ARGS="-CaddyConfigSource ${DEPLOY_ROOT}/incoming/${APP_VERSION}.caddy -CaddyConfigPath ${CADDY_CONFIG_PATH}"
+            echo "Web server configuration WILL be updated: ${CADDY_CONFIG_PATH}"
+          else
+            echo "Web server configuration will NOT be touched (CADDY_CONFIG_PATH unset)."
+          fi
+
+          ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${DEPLOY_ROOT}/deploy.ps1 -Archive ${DEPLOY_ROOT}/incoming/${APP_VERSION}.zip -Version ${APP_VERSION} -HealthUrl ${PUBLIC_BASE_URL}/healthz -Root ${DEPLOY_ROOT} ${CADDY_ARGS}"
+
+      - name: External health check
+        run: curl --fail --show-error --silent --retry 5 --retry-delay 3 "${PUBLIC_BASE_URL}/healthz"

@@ -1,0 +1,164 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: var(--border-default);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--background-primary);
+    color: var(--text-primary);
+    font-family:
+      Inter,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* Focus must always be visible — a trading terminal is operated by keyboard
+     under time pressure. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+
+  /* Numeric columns line up only with tabular figures. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+  }
+}
+
+@layer components {
+  .panel {
+    background-color: var(--background-secondary);
+    border: 1px solid var(--border-default);
+  }
+
+  .widget-scroll {
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Respect the OS reduced-motion preference: price flashes and transitions are
+   decorative, and meaning is always carried by text/symbol as well as colour. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Watchlist degradation order (BLK-01): when a dock narrows, derivable
+   decoration yields before information. The flag/logo goes first, then the
+   Spread column (derivable from Bid/Ask) — the symbol NAME never gives up a
+   letter, because a trader can act on "USDJPY" without a flag or a spread,
+   but never on a flag beside an anonymous price. Container queries, not media
+   queries: what matters is the width of the panel, not of the window. */
+.watchlist-root {
+  container: watchlist-panel / inline-size;
+}
+.favorites-root {
+  container: favorites-panel / inline-size;
+}
+@container watchlist-panel (max-width: 279px) {
+  .watchlist-flag {
+    display: none;
+  }
+  .watchlist-spread {
+    display: none;
+  }
+  .watchlist-grid {
+    grid-template-columns: minmax(6ch, 1fr) auto auto;
+  }
+}
+@container favorites-panel (max-width: 229px) {
+  .watchlist-flag {
+    display: none;
+  }
+}
+
+/* HGH-07: iOS Safari zooms into any focused input rendered under 16px and
+   never zooms back out, so the first tap on a field became a permanent
+   viewport jump. At the mobile shell's widths every text control renders at
+   16px, which is the documented threshold that disables the auto-zoom. */
+@media (max-width: 1023px) {
+  input,
+  select,
+  textarea {
+    /* !important on purpose: the terminal's compressed type scale tops out at
+       14px (`text-base` here is 0.875rem), so any utility class would keep the
+       control under the zoom threshold. This is an invariant about iOS, not a
+       style preference, and it must beat every utility. */
+    font-size: 16px !important;
+  }
+
+  /* HGH-07's companion: a 44px touch floor for every text-entry control at
+     the phone breakpoint. Checkboxes, radios and ranges keep their intrinsic
+     size — a 44px checkbox is a different control, not a bigger target. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    min-height: 44px !important;
+  }
+}
+
+/* MED-03: small icon controls grow a REAL 24×24 box, not just a pseudo-
+   element — audits (and some assistive tech) measure getBoundingClientRect,
+   which a ::after inset never changes. The icon keeps its visual size; the
+   BOX around it becomes the target. Call sites pair this with negative
+   margins where a dense layout must not grow. At the mobile breakpoint a
+   pseudo-element adds finger-sized forgiveness on top: growing every box to
+   44px would make adjacent list rows' targets overlap, which trades one
+   mis-tap for a worse one. */
+@layer components {
+  .hit-target {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-width: 24px;
+    min-height: 24px;
+  }
+  @media (max-width: 1023px) {
+    .hit-target::after {
+      content: '';
+      position: absolute;
+      inset: -10px;
+    }
+  }
+}

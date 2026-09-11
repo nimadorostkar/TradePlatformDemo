@@ -1,0 +1,28 @@
+# Binaries (anchored to repo root so they don't match the cmd/gateway package)
+/bin/
+/dist/
+/gateway
+*.exe
+
+# Local env / secrets
+.env
+*.local
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Go
+*.test
+*.out
+coverage.*
+vendor/
+
+# prebuilt image artifacts
+deploy/docker/gateway
+*.tar.gz
+
+# Obsidian app config (not part of the vault content)
+.obsidian/

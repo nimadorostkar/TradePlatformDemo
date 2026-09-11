@@ -1,0 +1,1 @@
+{"data":{"symbol":"EURUSD","volumeUnit":"lots","bids":[{"price":1.1,"volume":10,"market":false},{"price":1.0999,"volume":5,"market":false}],"asks":[{"price":1.1002,"volume":25,"market":false}],"crossed":false,"unclassified":0,"subscribed":true},"errorMessage":null,"message":"Success: Action performed successfully.","success":true}

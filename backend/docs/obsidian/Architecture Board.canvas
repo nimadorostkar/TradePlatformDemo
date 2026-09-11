@@ -1,0 +1,39 @@
+{
+  "nodes": [
+    {"id":"clients","type":"text","text":"## 👤 Clients\nWeb · TradingView UI · ClientWS","x":-1480,"y":-60,"width":260,"height":110,"color":"1"},
+    {"id":"middleware","type":"file","file":"Middleware.md","x":-1140,"y":-60,"width":260,"height":110,"color":"2"},
+    {"id":"ratelimit","type":"file","file":"Rate Limiting.md","x":-1140,"y":-240,"width":260,"height":110,"color":"2"},
+    {"id":"obs","type":"file","file":"Observability.md","x":-1140,"y":320,"width":260,"height":110,"color":"6"},
+    {"id":"rest","type":"file","file":"REST API.md","x":-800,"y":-200,"width":260,"height":110,"color":"4"},
+    {"id":"ws","type":"file","file":"WebSocket.md","x":-800,"y":60,"width":260,"height":110,"color":"4"},
+    {"id":"hub","type":"file","file":"Hub and Fan-out.md","x":-800,"y":320,"width":260,"height":110,"color":"4"},
+    {"id":"auth","type":"file","file":"Auth.md","x":-470,"y":320,"width":260,"height":110,"color":"4"},
+    {"id":"domain","type":"file","file":"Domain Services.md","x":-460,"y":-70,"width":270,"height":120,"color":"4"},
+    {"id":"transform","type":"file","file":"Transforms.md","x":-120,"y":-200,"width":260,"height":110,"color":"4"},
+    {"id":"mt5","type":"file","file":"MT5 Session.md","x":-120,"y":60,"width":260,"height":110,"color":"4"},
+    {"id":"breaker","type":"file","file":"Circuit Breaker.md","x":220,"y":60,"width":250,"height":110,"color":"4"},
+    {"id":"broker","type":"text","text":"## 🏦 MT5 Web API\ntradeapp.opofinance.com\n(whitelisted IP)","x":540,"y":60,"width":260,"height":120,"color":"1"},
+    {"id":"db","type":"file","file":"Database.md","x":-120,"y":340,"width":260,"height":110,"color":"6"},
+    {"id":"jobs","type":"file","file":"Price-History Jobs.md","x":220,"y":340,"width":260,"height":110,"color":"6"},
+    {"id":"moc","type":"file","file":"00 - Map of Content.md","x":-1480,"y":340,"width":260,"height":130,"color":"3"}
+  ],
+  "edges": [
+    {"id":"e1","fromNode":"clients","fromSide":"right","toNode":"middleware","toSide":"left","label":"HTTPS / WSS + JWT"},
+    {"id":"e2","fromNode":"ratelimit","fromSide":"bottom","toNode":"middleware","toSide":"top"},
+    {"id":"e3","fromNode":"obs","fromSide":"top","toNode":"middleware","toSide":"bottom"},
+    {"id":"e4","fromNode":"middleware","fromSide":"right","toNode":"rest","toSide":"left"},
+    {"id":"e5","fromNode":"middleware","fromSide":"right","toNode":"ws","toSide":"left"},
+    {"id":"e6","fromNode":"rest","fromSide":"right","toNode":"domain","toSide":"left"},
+    {"id":"e7","fromNode":"ws","fromSide":"right","toNode":"domain","toSide":"left"},
+    {"id":"e8","fromNode":"ws","fromSide":"bottom","toNode":"hub","toSide":"top"},
+    {"id":"e9","fromNode":"hub","fromSide":"right","toNode":"domain","toSide":"bottom"},
+    {"id":"e10","fromNode":"auth","fromSide":"top","toNode":"middleware","toSide":"bottom","label":"JWT/accounts"},
+    {"id":"e11","fromNode":"domain","fromSide":"right","toNode":"transform","toSide":"left","label":"source=tv"},
+    {"id":"e12","fromNode":"domain","fromSide":"right","toNode":"mt5","toSide":"left"},
+    {"id":"e13","fromNode":"mt5","fromSide":"right","toNode":"breaker","toSide":"left"},
+    {"id":"e14","fromNode":"breaker","fromSide":"right","toNode":"broker","toSide":"left"},
+    {"id":"e15","fromNode":"domain","fromSide":"bottom","toNode":"db","toSide":"top","label":"tick history"},
+    {"id":"e16","fromNode":"jobs","fromSide":"left","toNode":"db","toSide":"right","label":"COPY ingest"},
+    {"id":"e17","fromNode":"jobs","fromSide":"top","toNode":"mt5","toSide":"bottom"}
+  ]
+}

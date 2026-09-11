@@ -1,0 +1,143 @@
+# OpoTrade terminal — Caddy site configuration (Windows deployment).
+#
+# One Caddy instance serves BOTH public origins from the same atomic release,
+# so the shared configuration lives in a single snippet. It was previously
+# duplicated across two files, which meant every security-header or cache
+# change had to be made twice and stayed correct only by discipline.
+#
+# Everything environment-specific is an env var with the current production
+# value as its default, so this file deploys unchanged today and relocates to
+# another server by setting variables rather than editing config:
+#
+#   OPOTRADE_PUBLIC_ADDRESS   public origin (site address)
+#   OPOTRADE_STAGE_ADDRESS    staging origin (site address)
+#   OPOTRADE_SITE_ROOT        directory holding the current release
+#   OPOTRADE_GATEWAY_UPSTREAM OpoMTSocket gateway address
+#   OPOTRADE_CRM_UPSTREAM     CRM origin to proxy
+#   OPOTRADE_CRM_HOST         Host header sent to the CRM
+#
+# NOTE: the Content-Security-Policy below is also maintained in
+# deploy/nginx.conf for the container deployment. A change to one MUST be
+# mirrored in the other — see docs/operations/runbook.md.
+
+(opotrade_terminal) {
+	# Content-hashed assets are immutable by construction: the Vite bundle
+	# hashes its filenames and the TradingView bundles/ directory ships
+	# hashed chunk names. Long-lived caching here is what lets a repeat
+	# visit skip the 6.16 MB chart payload entirely (2026-08-24 chart-load
+	# teardown). A missing file still falls through try_files to
+	# index.html, whose own no-store header is applied later in the route
+	# and wins for the rewritten request.
+	@immutableAssets path /assets/* /charting_library/bundles/*
+	header @immutableAssets Cache-Control "public, max-age=31536000, immutable"
+	encode zstd gzip
+
+	# Keep gateway and CRM traffic same-origin. This avoids widening CORS on
+	# either existing service. WebSocket upgrades are handled automatically by
+	# reverse_proxy, which is what carries the `opotrade.v1` subprotocol.
+	#
+	# REQUIRED GLOBAL OPTION (lives in the main Caddyfile, not this site file):
+	# when this origin is fronted by Cloudflare, the global options block MUST
+	# declare Cloudflare's ranges as trusted proxies —
+	#
+	#   servers {
+	#       trusted_proxies static 173.245.48.0/20 103.21.244.0/22 ... (https://www.cloudflare.com/ips/)
+	#   }
+	#
+	# — otherwise Caddy discards the client hop from X-Forwarded-For and this
+	# reverse_proxy forwards only the Cloudflare edge IP. The gateway then
+	# cannot tell clients apart: its per-IP rate limiting and failed-sign-in
+	# throttle (HGH-02) degrade for ALL Cloudflare traffic. Verified on
+	# production 2026-08-28: without it, every user keyed to 127.0.0.1 and five
+	# failed sign-ins by anyone locked out the whole site. The gateway side of
+	# the same contract is RATE_LIMIT_TRUSTED_PROXIES (loopback + Cloudflare
+	# ranges) in gateway.env.
+	handle_path /gateway/* {
+		reverse_proxy {$OPOTRADE_GATEWAY_UPSTREAM:127.0.0.1:5070}
+	}
+
+	handle_path /crm/* {
+		reverse_proxy {$OPOTRADE_CRM_UPSTREAM:https://myaccount.opofinance.com} {
+			header_up Host {$OPOTRADE_CRM_HOST:myaccount.opofinance.com}
+		}
+	}
+
+	handle {
+		root * {$OPOTRADE_SITE_ROOT:C:/sites/opotrade-ui-new/current}
+		route {
+			try_files {path} /index.html
+
+			# The HTML shell and runtime settings select hashed application
+			# assets. Caching either across a release can strand a browser on
+			# an obsolete or misrouted terminal.
+			@deploymentMetadata path / /index.html /runtime-config.js
+			header @deploymentMetadata Cache-Control "no-cache, no-store, must-revalidate"
+
+			file_server
+		}
+	}
+
+	# The health endpoint is an extensionless static file, so Caddy cannot infer
+	# its type. Declaring it keeps `/healthz` honest for load balancers and for
+	# the deployment script's own verification step.
+	@health path /healthz
+	header @health {
+		Content-Type "application/json"
+		Cache-Control "no-store"
+	}
+
+	# NOTE: when this site is fronted by Cloudflare with Web Analytics (RUM)
+	# auto-injection enabled, Cloudflare inserts an inline loader plus
+	# static.cloudflareinsights.com/beacon.min.js into every page. This CSP
+	# blocks BOTH — deliberately: a real-money terminal executes only scripts
+	# shipped in its own release. The resulting console errors are expected;
+	# to remove them, disable the RUM injection in the Cloudflare zone rather
+	# than widening script-src here.
+
+	# TradingView's licensed same-origin bootstrap writes its chart document
+	# dynamically and requires inline bootstrap scripts. Scope that permission
+	# to the bootstrap resource only; the application document remains strict.
+	@tradingViewFrame path /charting_library/sameorigin.html
+	header @tradingViewFrame Content-Security-Policy "default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'self'"
+
+	@applicationDocument {
+		not path /charting_library/sameorigin.html
+	}
+	# static.cloudflareinsights.com / cloudflareinsights.com: Cloudflare Web
+	# Analytics is injected AT THE EDGE, so the policy must name it or every
+	# page load logs three CSP violations and the analytics never works
+	# (MED-10). Named hosts only — no 'unsafe-inline' was added for it.
+	header @applicationDocument Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+
+	header {
+		Cross-Origin-Opener-Policy "same-origin"
+		# unload=(self): TradingView's licensed library registers unload
+		# handlers, and Chrome's phased deprecation otherwise disallows the
+		# event and logs a Permissions-Policy violation on every chart load.
+		# Opting the origin back in keeps the pre-deprecation lifecycle the
+		# library was built for (and keeps the terminal out of bfcache, which
+		# would otherwise restore a stale trading session on back-navigation).
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), unload=(self)"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+}
+
+{$OPOTRADE_PUBLIC_ADDRESS:46.62.247.67} {
+	import opotrade_terminal
+
+	# Let's Encrypt issues short-lived, publicly trusted certificates for public
+	# IP addresses. Caddy renews these automatically. A hostname origin uses
+	# Caddy's normal automatic issuance and needs no override.
+	tls {
+		issuer acme {
+			profile shortlived
+		}
+	}
+}
+
+{$OPOTRADE_STAGE_ADDRESS:opotrade-ui-stage.opofinance.com} {
+	import opotrade_terminal
+}

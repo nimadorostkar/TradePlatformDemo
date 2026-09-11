@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["vite/client", "node"],
+
+    /* Strictness — every flag on. This is a real-money interface. */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      // The licensed declarations first, the committed shim second. TypeScript
+      // tries these in order, so a checkout WITH the licensed package compiles
+      // against the real contract and one without it (any pull request, which
+      // must never be able to reach the credentials that fetch it) still
+      // typechecks against the stand-in. See the shim's header for what that
+      // does and does not prove.
+      "@tv/types/*": ["./vendor/tradingview/types/*", "./vendor/tradingview/types-shim/*"],
+      "@tv/*": ["./vendor/tradingview/*"]
+    }
+  },
+  "include": ["src", "vendor/tradingview/types", "vendor/tradingview/types-shim"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "e2e"]
+}

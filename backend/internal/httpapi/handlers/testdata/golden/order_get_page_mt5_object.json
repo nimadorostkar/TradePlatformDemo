@@ -1,0 +1,1 @@
+{"data":{"retcode":"0 Done","answer":[{"Order":"1","Symbol":"EURUSD","Type":2,"State":1,"VolumeInitial":50000,"PriceOrder":1.1,"PriceSL":1.05,"PriceTP":1.2,"VolumeCurrent":30000,"Comment":"hi","TimeSetup":1700,"side":-1,"TypeTime":2,"TimeExpiration":1800000000}]},"errorMessage":null,"message":"Success: Action performed successfully.","success":true}

@@ -1,0 +1,9 @@
+# Runtime-only image: copies a prebuilt static linux/amd64 binary into distroless.
+# Build the binary first (CGO_ENABLED=0 GOOS=linux GOARCH=amd64), so no Go
+# toolchain is needed at image-build time. See docs/LAUNCH_VPS.md.
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY gateway /app/gateway
+EXPOSE 5063
+USER nonroot:nonroot
+ENTRYPOINT ["/app/gateway"]

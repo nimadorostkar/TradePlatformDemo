@@ -1,0 +1,1 @@
+{"data":[{"id":"9002","orderId":"1","positionId":"7","symbol":"EURUSD","price":1.1003,"qty":3,"qtyMt5":30000,"side":1,"time":1750000,"timeSeconds":1750,"commission":-1.05,"swap":0,"profit":0,"entry":0,"comment":""}],"errorMessage":null,"message":"Success: Action performed successfully.","success":true}
