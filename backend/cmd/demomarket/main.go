@@ -25,11 +25,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -149,9 +151,9 @@ func (b *demoBroker) orderJSON() string {
 		time.Now().Add(-3*time.Hour).Unix(), ftoa(price, 5), ftoa(price-0.0100, 5), ftoa(price+0.0200, 5), time.Now().Add(30*24*time.Hour).Unix())
 }
 
-func (b *demoBroker) accountJSON() string {
+func (b *demoBroker) accountJSON(login int64, balance float64) string {
 	p := b.profit()
-	return fmt.Sprintf(`{"retcode":"0 Done","answer":{"Login":"%d","Balance":%s,"Equity":%s,"Profit":%s}}`, demoLogin, ftoa(demoBalance, 2), ftoa(demoBalance+p, 2), ftoa(p, 2))
+	return fmt.Sprintf(`{"retcode":"0 Done","answer":{"Login":"%d","Balance":%s,"Equity":%s,"Profit":%s}}`, login, ftoa(balance, 2), ftoa(balance+p, 2), ftoa(p, 2))
 }
 
 func main() {
@@ -179,6 +181,22 @@ func main() {
 		log.Fatalf("unknown -source %q (live|synthetic)", *source)
 	}
 	broker := &demoBroker{provider: provider}
+
+	// User management: PostgreSQL when USERS_DSN is set, otherwise in-memory
+	// with the same seed (a laptop without a database still signs in).
+	var users UserStore
+	if dsn := os.Getenv("USERS_DSN"); dsn != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		pg, err := openPGStore(ctx, dsn)
+		cancel()
+		if err != nil {
+			log.Fatalf("users: cannot open USERS_DSN: %v", err)
+		}
+		users = pg
+	} else {
+		users = newMemStore()
+	}
+	adminToken := os.Getenv("ADMIN_TOKEN")
 
 	mux := http.NewServeMux()
 
@@ -217,11 +235,27 @@ func main() {
 	mux.HandleFunc("/api/position/update", func(w http.ResponseWriter, r *http.Request) {
 		j(w, `{"retcode":"0 Done","answer":`+broker.positionJSON()+`}`)
 	})
+	loginOf := func(r *http.Request) int64 {
+		v, _ := strconv.ParseInt(r.URL.Query().Get("login"), 10, 64)
+		return v
+	}
 	mux.HandleFunc("/api/user/get", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":{"ID":"1010","Name":"Demo Trader"}}`)
+		login := loginOf(r)
+		name := "Demo Trader"
+		if a, ok := users.AccountByLogin(r.Context(), login); ok {
+			if u, ok := users.UserByID(r.Context(), a.UserID); ok && u.Name != "" {
+				name = u.Name
+			}
+		}
+		j(w, fmt.Sprintf(`{"retcode":"0 Done","answer":{"ID":"%d","Name":%q}}`, login, name))
 	})
 	mux.HandleFunc("/api/user/account/get", func(w http.ResponseWriter, r *http.Request) {
-		j(w, broker.accountJSON())
+		login := loginOf(r)
+		balance := demoBalance
+		if a, ok := users.AccountByLogin(r.Context(), login); ok {
+			balance = a.Balance
+		}
+		j(w, broker.accountJSON(login, balance))
 	})
 	mux.HandleFunc("/api/deal/get_page", func(w http.ResponseWriter, r *http.Request) {
 		j(w, `{"retcode":"0 Done","answer":[`+dealRow+`]}`)
@@ -312,26 +346,141 @@ func main() {
 		j(w, fmt.Sprintf(`{"retcode":"0 Done","answer":{"Symbol":%q,"Items":[%s]}}`, ins.Symbol, strings.Join(items, ",")))
 	})
 
-	// ── CRM: login + account list ────────────────────────────────────────────
+	// ── CRM: users, sessions, accounts ───────────────────────────────────────
+	writeJSON := func(w http.ResponseWriter, status int, v any) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(v)
+	}
 	mux.HandleFunc("/client-api/login", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Email, Password string }
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		if strings.EqualFold(req.Email, "trader@example.com") && req.Password == "correct-password" {
-			j(w, `{"accessToken":"demo-crm-token"}`)
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req)
+		_, token, err := users.Authenticate(r.Context(), req.Email, req.Password)
+		switch {
+		case err == nil:
+			writeJSON(w, http.StatusOK, map[string]string{"accessToken": token})
+		case errors.Is(err, errBadCredentials), errors.Is(err, errDisabled):
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		default:
+			log.Printf("users: login: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user store unavailable"})
+		}
+	})
+	// Self-service registration: a new user with one funded demo account.
+	mux.HandleFunc("/client-api/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		w.WriteHeader(http.StatusUnauthorized)
-		j(w, `{"error":"invalid credentials"}`)
+		var req struct{ Email, Password, Name string }
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req)
+		u, err := users.Register(r.Context(), req.Email, req.Password, req.Name)
+		switch {
+		case err == nil:
+			accounts, _ := users.Accounts(r.Context(), u.ID)
+			logins := make([]int64, 0, len(accounts))
+			for _, a := range accounts {
+				logins = append(logins, a.Login)
+			}
+			writeJSON(w, http.StatusCreated, map[string]any{"id": u.ID, "email": u.Email, "name": u.Name, "accounts": logins})
+		case errors.Is(err, errEmailTaken):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "email already registered"})
+		case errors.Is(err, errInvalidInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		default:
+			log.Printf("users: register: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user store unavailable"})
+		}
 	})
+	bearer := func(r *http.Request) string {
+		return strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	}
 	mux.HandleFunc("/client-api/accounts", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer demo-crm-token" {
+		u, ok := users.UserBySession(r.Context(), bearer(r))
+		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		// Three demo accounts of different types, plus one non-trading profile
-		// (typeId 1) the gateway's account policy must filter out.
-		j(w, `[{"login":"1010","typeId":57},{"login":"2020","typeId":58},{"login":"3030","typeId":11},{"login":"9999","typeId":1}]`)
+		accounts, err := users.Accounts(r.Context(), u.ID)
+		if err != nil {
+			log.Printf("users: accounts: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		type dto struct {
+			Login     string  `json:"login"`
+			TypeID    int     `json:"typeId"`
+			Currency  string  `json:"currency"`
+			Balance   float64 `json:"balance"`
+			IsEnabled bool    `json:"isEnabled"`
+		}
+		out := make([]dto, 0, len(accounts))
+		for _, a := range accounts {
+			out = append(out, dto{Login: strconv.FormatInt(a.Login, 10), TypeID: a.TypeID, Currency: a.Currency, Balance: a.Balance, IsEnabled: true})
+		}
+		writeJSON(w, http.StatusOK, out)
 	})
+	mux.HandleFunc("/client-api/me", func(w http.ResponseWriter, r *http.Request) {
+		u, ok := users.UserBySession(r.Context(), bearer(r))
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "email": u.Email, "name": u.Name, "createdAt": u.CreatedAt})
+	})
+
+	// ── Admin (ADMIN_TOKEN): list users, enable/disable ──────────────────────
+	adminOnly := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if adminToken == "" || bearer(r) != adminToken {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			next(w, r)
+		}
+	}
+	mux.HandleFunc("/admin/users", adminOnly(func(w http.ResponseWriter, r *http.Request) {
+		list, err := users.ListUsers(r.Context())
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		type dto struct {
+			ID          int64      `json:"id"`
+			Email       string     `json:"email"`
+			Name        string     `json:"name"`
+			Enabled     bool       `json:"enabled"`
+			CreatedAt   time.Time  `json:"createdAt"`
+			LastLoginAt *time.Time `json:"lastLoginAt"`
+			Accounts    []int64    `json:"accounts"`
+		}
+		out := make([]dto, 0, len(list))
+		for _, u := range list {
+			accounts, _ := users.Accounts(r.Context(), u.ID)
+			logins := make([]int64, 0, len(accounts))
+			for _, a := range accounts {
+				logins = append(logins, a.Login)
+			}
+			out = append(out, dto{u.ID, u.Email, u.Name, u.Enabled, u.CreatedAt, u.LastLoginAt, logins})
+		}
+		writeJSON(w, http.StatusOK, out)
+	}))
+	mux.HandleFunc("/admin/users/", adminOnly(func(w http.ResponseWriter, r *http.Request) {
+		// POST /admin/users/{id}/enabled  {"enabled": false}
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/admin/users/"), "/")
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil || len(parts) != 2 || parts[1] != "enabled" || r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		var req struct{ Enabled bool }
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&req)
+		if err := users.SetEnabled(r.Context(), id, req.Enabled); err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": req.Enabled})
+	}))
 
 	// ── Everything else under /api → generic OK ─────────────────────────────
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -346,6 +495,6 @@ func main() {
 		requests.Add(1)
 		mux.ServeHTTP(w, r)
 	})
-	log.Printf("demo market + CRM listening on %s — prices: %s, %d instruments", *addr, provider.Name(), len(instruments))
+	log.Printf("demo market + CRM listening on %s — prices: %s, %d instruments; users: %s; admin API: %v", *addr, provider.Name(), len(instruments), users.Name(), adminToken != "")
 	log.Fatal(http.ListenAndServe(*addr, logged))
 }

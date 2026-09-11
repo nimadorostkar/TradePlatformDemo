@@ -334,3 +334,63 @@ describe('CrmAuthSession keep-me-signed-in', () => {
     expect(bodyOf(fetchImpl, '/api/Authentication/login').Remember).toBe(false);
   });
 });
+
+describe('CrmAuthSession registration', () => {
+  function sessionWith(fetchImpl: typeof fetch) {
+    return new CrmAuthSession({
+      gatewayBaseUrl: 'https://trade.example/gateway',
+      crmBaseUrl: 'https://trade.example/crm',
+      tokenStore: new TokenStore({ legacyStorage: false }),
+      fetchImpl,
+    });
+  }
+
+  it('posts to the CRM register endpoint and returns the new accounts', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 7, email: 'new@example.com', accounts: [100007] }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ) as unknown as typeof fetch;
+    const result = await sessionWith(fetchImpl).register({
+      email: 'new@example.com',
+      password: 'longenough1',
+      name: 'New',
+    });
+    expect(result).toEqual({ id: 7, email: 'new@example.com', accounts: ['100007'] });
+    const [url, init] = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+      .calls[0]!;
+    expect(url).toBe('https://trade.example/crm/client-api/register');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({
+      email: 'new@example.com',
+      password: 'longenough1',
+      name: 'New',
+    });
+  });
+
+  it('turns a duplicate email into a validation error the form can show', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: 'email already registered' }), { status: 409 }),
+      ) as unknown as typeof fetch;
+    await expect(
+      sessionWith(fetchImpl).register({ email: 'dup@example.com', password: 'longenough1' }),
+    ).rejects.toMatchObject({ kind: 'validation', code: 'crm.register.conflict' });
+  });
+
+  it('relays the CRM validation message on a 400', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'invalid input: password must be 8–128 characters' }), {
+        status: 400,
+      }),
+    ) as unknown as typeof fetch;
+    await expect(
+      sessionWith(fetchImpl).register({ email: 'x@example.com', password: 'short' }),
+    ).rejects.toMatchObject({
+      kind: 'validation',
+      message: 'invalid input: password must be 8–128 characters',
+    });
+  });
+});

@@ -24,6 +24,11 @@ export function SignInScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  // Registration lives on the same screen: a new visitor creates a demo
+  // account (user + funded account in the CRM's user store) and is signed in
+  // with it immediately.
+  const [mode, setMode] = useState<'sign-in' | 'register'>('sign-in');
   // Off by default (MED-02): a 30-day session is an opt-in, not a surprise.
   const [remember, setRemember] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -36,11 +41,15 @@ export function SignInScreen() {
 
       setSubmitting(true);
       setError(null);
-      setStatus('signing-in');
 
+      const trimmedEmail = email.trim();
       try {
-        await services.auth.signIn(email.trim(), password, { remember });
-        setUsername(email.trim());
+        if (mode === 'register') {
+          await services.auth.register({ email: trimmedEmail, password, name: name.trim() });
+        }
+        setStatus('signing-in');
+        await services.auth.signIn(trimmedEmail, password, { remember });
+        setUsername(trimmedEmail);
         setStatus('signed-in');
       } catch (caught) {
         const tradingError = TradingError.from(caught);
@@ -50,7 +59,7 @@ export function SignInScreen() {
         setSubmitting(false);
       }
     },
-    [submitting, services, email, password, remember, setStatus, setUsername],
+    [submitting, services, mode, email, password, name, remember, setStatus, setUsername],
   );
 
   return (
@@ -69,7 +78,9 @@ export function SignInScreen() {
           )}
           <h1 className="text-lg font-semibold">{brand.platformName}</h1>
           <p className="mt-1 text-xs text-text-muted">
-            Sign in with your {brand.brokerName} account
+            {mode === 'register'
+              ? `Create your ${brand.brokerName} demo account`
+              : `Sign in with your ${brand.brokerName} account`}
           </p>
         </div>
 
@@ -77,6 +88,20 @@ export function SignInScreen() {
           onSubmit={onSubmit}
           className="space-y-3 rounded-lg border border-[var(--border-default)] bg-[var(--background-secondary)] p-4"
         >
+          {mode === 'register' && (
+            <Field label="Name" htmlFor="signin-name">
+              <Input
+                id="signin-name"
+                type="text"
+                autoComplete="name"
+                maxLength={80}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="h-9 text-sm max-lg:h-11"
+              />
+            </Field>
+          )}
+
           <Field label="Email" htmlFor="signin-email">
             <Input
               id="signin-email"
@@ -89,12 +114,17 @@ export function SignInScreen() {
             />
           </Field>
 
-          <Field label="Password" htmlFor="signin-password">
+          <Field
+            label="Password"
+            htmlFor="signin-password"
+            hint={mode === 'register' ? 'At least 8 characters.' : undefined}
+          >
             <Input
               id="signin-password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
               required
+              minLength={mode === 'register' ? 8 : undefined}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="h-9 text-sm max-lg:h-11"
@@ -125,8 +155,23 @@ export function SignInScreen() {
             className="w-full"
             disabled={email.trim() === '' || password === ''}
           >
-            Sign in
+            {mode === 'register' ? 'Create demo account' : 'Sign in'}
           </Button>
+
+          {/* Registration is self-service against the CRM's user store: a new
+              user gets one funded demo account and is signed in with it. */}
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === 'register' ? 'sign-in' : 'register');
+              setError(null);
+            }}
+            className="block w-full text-center text-xs text-text-secondary underline-offset-2 hover:text-text-primary hover:underline"
+          >
+            {mode === 'register'
+              ? 'Already have an account? Sign in'
+              : 'New here? Create a demo account'}
+          </button>
 
           {/* HGH-01: a login form with no links is a dead end — a client who
               has forgotten their password had no route except a support

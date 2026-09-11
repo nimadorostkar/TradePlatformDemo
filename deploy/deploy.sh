@@ -7,8 +7,9 @@
 # What it does:
 #   1. builds the terminal here with the public URLs compiled in as fallbacks;
 #   2. rsyncs deploy/ (+ the built SPA) and backend/ source to REMOTE_DIR;
-#   3. on the host: writes gateway.env once with fresh random secrets, writes
-#      frontend.env, then `docker compose up -d --build`;
+#   3. on the host: writes .env (database password, admin token) and
+#      gateway.env once with fresh random secrets, writes frontend.env, then
+#      `docker compose up -d --build`;
 #   4. smoke-tests the public origin: /healthz, /gateway/readyz, a mock login.
 #
 # Nothing secret is read from this machine; secrets are generated on the host.
@@ -46,7 +47,7 @@ cp "$ROOT/frontend/deploy/nginx.conf" "$ROOT/frontend/deploy/entrypoint.sh" "$RO
 echo "▸ syncing to ${SSH_HOST}:${REMOTE_DIR}"
 ssh_ "mkdir -p '$REMOTE_DIR'"
 rsync -az --delete -e "ssh -i $SSH_KEY" \
-  --exclude 'frontend.env' --exclude 'gateway.env' \
+  --exclude 'frontend.env' --exclude 'gateway.env' --exclude '.env' \
   "$ROOT/deploy/" "$SSH_HOST:$REMOTE_DIR/deploy/"
 rsync -az --delete -e "ssh -i $SSH_KEY" \
   --exclude '.git' --exclude 'bin' --exclude 'dist' --exclude '.env' --exclude '.env.*' \
@@ -57,6 +58,11 @@ echo "▸ configuring + starting on host"
 ssh_ bash -s <<REMOTE
 set -euo pipefail
 cd '$REMOTE_DIR/deploy'
+if [ ! -f .env ]; then
+  printf 'POSTGRES_PASSWORD=%s\nADMIN_TOKEN=%s\n' "\$(openssl rand -hex 24)" "\$(openssl rand -hex 24)" > .env
+  chmod 600 .env
+  echo "  .env created (database password, admin token)"
+fi
 if [ ! -f gateway.env ]; then
   jwt=\$(openssl rand -hex 32); mgr=\$(openssl rand -hex 24)
   sed -e "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=\$jwt|" \

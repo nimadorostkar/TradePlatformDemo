@@ -61,6 +61,34 @@ How it is wired: the browser talks only to the Vite origin, which proxies
 There is no CI/CD in this repository; `make check` is the full verification
 suite and is run locally.
 
+## Users and accounts
+
+User management lives in **PostgreSQL**, owned by the `demomarket` service and
+exposed to the terminal through the CRM contract (`/crm/...`). Schema
+(`backend/cmd/demomarket/users.go`, migrated automatically at start):
+
+| table | holds |
+|---|---|
+| `users` | id, email (unique), bcrypt `password_hash`, name, `enabled`, created/last-login timestamps |
+| `accounts` | trading `login` (PK), owning `user_id`, `type_id`, currency, balance |
+| `sessions` | sha256 `token_hash` (PK), `user_id`, `expires_at` — the CRM access token the client holds is never stored in clear |
+
+- **Sign-up** is self-service on the sign-in screen ("New here? Create a demo
+  account"): `POST /client-api/register {email,password,name}` creates the user
+  and one funded demo account (login from `account_login_seq`, starting 100001),
+  then the normal sign-in runs. Passwords: 8–128 characters. Duplicate emails → 409.
+- **Sign-in**: `POST /client-api/login` → 30-day session; `POST /client-api/accounts`
+  (Bearer) lists the user's accounts; `GET /client-api/me` describes the user.
+  Disabled users cannot sign in and their sessions are revoked.
+- **Admin** (`Authorization: Bearer $ADMIN_TOKEN`; 404 without it):
+  `GET /admin/users` lists users with their accounts and last login;
+  `POST /admin/users/{id}/enabled {"enabled":false}` disables (or re-enables) one.
+- A fresh database is seeded with `trader@example.com` / `correct-password`
+  (accounts 1010, 2020, 3030). The same PostgreSQL also holds the gateway's price
+  alerts and saved workspaces (`POSTGRES_DSN`).
+- Locally, `make dev` starts a PostgreSQL container when Docker is running
+  (`USERS_DSN`); without Docker the user store runs in memory with the same seed.
+
 ## Deploying to a server
 
 ```bash
@@ -75,9 +103,9 @@ and `/crm/` same-origin — the production layout — in front of the **frontend
 
 - The terminal is built on the machine running the script; only `dist/` is
   shipped, so the host needs no Node toolchain.
-- `gateway.env` is generated on the host on first deploy with fresh random
-  `JWT_SECRET_KEY` / `MANAGER_API_KEY` and never overwritten; nothing secret leaves
-  your machine. It points the gateway at the `demomarket` service only.
+- `gateway.env` (`JWT_SECRET_KEY`, `MANAGER_API_KEY`) and `.env` (`POSTGRES_PASSWORD`,
+  `ADMIN_TOKEN`) are generated on the host on first deploy with fresh random values
+  and never overwritten; nothing secret leaves your machine.
 - Served over plain HTTP on an IP: the gateway's session-restore cookies are
   `Secure`-only, so a page reload asks for sign-in again. Put a domain + TLS in
   front (`PUBLIC_ORIGIN=https://…` switches the terminal to production mode) and

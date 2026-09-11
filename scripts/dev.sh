@@ -29,8 +29,27 @@ fi
 echo "▸ building gateway + mock"
 ( cd "$ROOT/backend" && go build -o bin/gateway ./cmd/gateway && go build -o bin/demomarket ./cmd/demomarket )
 
+# User management needs a database. With Docker available a local PostgreSQL
+# is started (data kept in the tradeplatform-dev-pg volume); without it the
+# user store runs in memory with the same seed and everything still works.
+USERS_DSN=""
+if docker info >/dev/null 2>&1; then
+  if ! docker ps --format '{{.Names}}' | grep -qx tradeplatform-dev-postgres; then
+    docker rm -f tradeplatform-dev-postgres >/dev/null 2>&1 || true
+    docker run -d --name tradeplatform-dev-postgres -p 127.0.0.1:55432:5432 \
+      -e POSTGRES_USER=tradeplatform -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tradeplatform \
+      -v tradeplatform-dev-pg:/var/lib/postgresql/data postgres:16-alpine >/dev/null
+  fi
+  for _ in $(seq 1 40); do docker exec tradeplatform-dev-postgres pg_isready -U tradeplatform -d tradeplatform >/dev/null 2>&1 && break; sleep 0.5; done
+  sleep 1
+  USERS_DSN="postgres://tradeplatform:dev@127.0.0.1:55432/tradeplatform?sslmode=disable"
+  echo "▸ postgres      127.0.0.1:55432 (docker: tradeplatform-dev-postgres)"
+else
+  echo "▸ postgres      not available (Docker not running) — user store runs in memory"
+fi
+
 echo "▸ demomarket  :5199"
-( cd "$ROOT/backend" && exec ./bin/demomarket -addr 127.0.0.1:5199 ) >"$LOGS/demomarket.log" 2>&1 &
+( cd "$ROOT/backend" && USERS_DSN="$USERS_DSN" ADMIN_TOKEN=dev-admin-token exec ./bin/demomarket -addr 127.0.0.1:5199 ) >"$LOGS/demomarket.log" 2>&1 &
 PIDS+=($!)
 # The gateway authenticates its MT5 session at startup and only retries on
 # its 20 s ping loop, so the mock must be listening before the gateway starts.
@@ -50,7 +69,8 @@ for _ in $(seq 1 60); do curl -fsS http://localhost:3100/ >/dev/null 2>&1 && bre
 cat <<MSG
 
   ✔ running — open http://localhost:3100
-    sign in: trader@example.com / correct-password
+    sign in: trader@example.com / correct-password  (or create a demo account on the sign-in screen)
+    admin:   curl -H 'Authorization: Bearer dev-admin-token' http://127.0.0.1:5199/admin/users
     logs:    $LOGS/{demomarket,gateway,vite}.log
 
 MSG

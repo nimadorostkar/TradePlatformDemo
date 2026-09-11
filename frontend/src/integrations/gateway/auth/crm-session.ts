@@ -90,6 +90,65 @@ export class CrmAuthSession implements AuthSession {
     return this.persist;
   }
 
+  /**
+   * Self-service registration against the CRM's user store. Creates the user
+   * and one funded demo account; the caller then signs in normally. The CRM
+   * is called directly (same-origin /crm), exactly like the account list.
+   */
+  async register(
+    input: { email: string; password: string; name?: string },
+    signal?: AbortSignal,
+  ): Promise<{ id: number; email: string; accounts: string[] }> {
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.crmBaseUrl}/client-api/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: input.email,
+          password: input.password,
+          name: input.name ?? '',
+        }),
+        signal,
+        credentials: 'omit',
+      });
+    } catch (error) {
+      throw TradingError.from(error);
+    }
+    const body = (await response.json().catch(() => ({}))) as {
+      id?: number;
+      email?: string;
+      accounts?: Array<number | string>;
+      error?: string;
+    };
+    if (response.status === 201 && typeof body.id === 'number') {
+      return {
+        id: body.id,
+        email: body.email ?? input.email,
+        accounts: (body.accounts ?? []).map(String),
+      };
+    }
+    if (response.status === 409) {
+      throw new TradingError({
+        kind: 'validation',
+        message: 'That email is already registered — sign in instead.',
+        code: 'crm.register.conflict',
+      });
+    }
+    if (response.status === 400) {
+      throw new TradingError({
+        kind: 'validation',
+        message: body.error ?? 'Please check the details and try again.',
+        code: 'crm.register.invalid',
+      });
+    }
+    throw new TradingError({
+      kind: 'unavailable',
+      message: 'Could not create the account right now.',
+      code: `crm.register.${response.status}`,
+    });
+  }
+
   /** Exchanges an externally-supplied CRM token (host bootstrap path). */
   async signInWithCrmToken(
     crmToken: string,

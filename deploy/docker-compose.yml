@@ -1,13 +1,16 @@
 # Whole platform on one host, one public port (EDGE_PORT, default 8080):
 #
 #   browser ──► edge (nginx) ──► frontend (nginx, prebuilt SPA)
-#                             ├─► gateway  (Go, MT5 Manager API gateway)
-#                             └─► demomarket (real market data via Yahoo Finance
-#                                             + demo broker/CRM; no real broker)
+#                             ├─► gateway  (Go, MT5 Manager API gateway) ─┐
+#                             └─► demomarket (real market data via Yahoo  ├─► postgres
+#                                 Finance/Binance + demo broker/CRM with  │   (users, accounts,
+#                                 user management; no real broker) ───────┘    sessions; the
+#                                                                              gateway's alerts
+#                                                                              and workspaces)
 #
 # Run from this directory on the host: docker compose up -d --build
-# gateway.env is created by deploy.sh (fresh random secrets) — see
-# gateway.env.example.
+# gateway.env and .env (database password, admin token) are created by
+# deploy.sh with fresh random secrets — see gateway.env.example.
 
 name: tradeplatform
 
@@ -44,8 +47,14 @@ services:
       dockerfile: deploy/docker/Dockerfile
     restart: unless-stopped
     env_file: gateway.env
+    environment:
+      # Price alerts and saved workspaces persist here (internal/store/appdata).
+      POSTGRES_DSN: postgres://tradeplatform:${POSTGRES_PASSWORD}@postgres:5432/tradeplatform?sslmode=disable
     depends_on:
-      - demomarket
+      demomarket:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     networks: [platform]
 
   demomarket:
@@ -53,7 +62,33 @@ services:
       context: ../backend
       dockerfile: deploy/docker/Dockerfile.demomarket
     restart: unless-stopped
+    environment:
+      USERS_DSN: postgres://tradeplatform:${POSTGRES_PASSWORD}@postgres:5432/tradeplatform?sslmode=disable
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks: [platform]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tradeplatform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: tradeplatform
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tradeplatform -d tradeplatform"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Not published on any host port: only the compose network reaches it.
+    networks: [platform]
+
+volumes:
+  pgdata:
 
 networks:
   platform:
