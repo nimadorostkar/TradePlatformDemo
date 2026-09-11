@@ -1362,3 +1362,43 @@ func (b *demoBroker) OrderCount(login int64) int {
 	}
 	return 0
 }
+
+// AccountFigures is the live snapshot the CRM's account list carries.
+type AccountFigures struct {
+	Equity, Margin, MarginFree float64
+	Leverage                   int
+	Positions, Orders          int
+}
+
+// Summary reports an account's live figures; a login the CRM does not know
+// answers zeros.
+func (b *demoBroker) Summary(login int64) AccountFigures {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	a, ok := b.acct(login)
+	if !ok {
+		return AccountFigures{}
+	}
+	s := b.summarize(a)
+	return AccountFigures{Equity: s.Equity, Margin: s.Margin, MarginFree: s.MarginFree, Leverage: a.Leverage, Positions: len(a.Positions), Orders: len(a.Orders)}
+}
+
+// Reset empties an account's book — positions, working orders, history and
+// deals — and refunds it to balance. The admin's way to hand a demo account
+// back in its starting state.
+func (b *demoBroker) Reset(login int64, balance float64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	a, ok := b.acct(login)
+	if !ok {
+		return
+	}
+	a.Positions, a.Orders, a.History, a.Deals = map[int64]*position{}, map[int64]*order{}, nil, nil
+	a.Leverage = defaultLeverage
+	a.Balance = balance
+	b.dirty = true
+	if err := b.users.SetBalance(context.Background(), login, balance); err != nil {
+		log.Printf("broker: reset balance of %d not written to the user store: %v", login, err)
+	}
+	log.Printf("broker: login %d reset to %.2f", login, balance)
+}

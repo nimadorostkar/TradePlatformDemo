@@ -110,6 +110,38 @@ func candlesJSON(ins *instrument, bars []Bar) string {
 	return sb.String()
 }
 
+// userDTO is the profile as the CRM reports it to the client and the admin.
+func userDTO(u *User) map[string]any {
+	return map[string]any{
+		"id": u.ID, "email": u.Email, "name": u.Name,
+		"phone": u.Phone, "country": u.Country, "city": u.City,
+		"language": u.Language, "timezone": u.Timezone,
+		"kycStatus": u.KYCStatus, "createdAt": u.CreatedAt, "updatedAt": u.UpdatedAt,
+	}
+}
+
+// accountDTO is a trading account with its live figures from the broker.
+func accountDTO(a Account, broker *demoBroker) map[string]any {
+	s := broker.Summary(a.Login)
+	return map[string]any{
+		"login": strconv.FormatInt(a.Login, 10), "typeId": a.TypeID, "currency": a.Currency,
+		"balance": a.Balance, "equity": s.Equity, "margin": s.Margin, "marginFree": s.MarginFree,
+		"leverage": s.Leverage, "openPositions": s.Positions, "pendingOrders": s.Orders,
+		"createdAt": a.CreatedAt,
+	}
+}
+
+// startingBalance is what an account is funded with on a reset: the seeded
+// logins keep their documented amounts, everyone else the sign-up funding.
+func startingBalance(a Account) float64 {
+	for _, seed := range seedAccounts {
+		if seed.Login == a.Login {
+			return seed.Balance
+		}
+	}
+	return demoStartBalance
+}
+
 func main() {
 	addr := flag.String("addr", ":5199", "listen address")
 	source := flag.String("source", "live", "price source: live (Yahoo Finance, real data) or synthetic")
@@ -357,9 +389,12 @@ func main() {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		var req struct{ Email, Password, Name string }
+		var req struct {
+			Email, Password string
+			Profile
+		}
 		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req)
-		u, err := users.Register(r.Context(), req.Email, req.Password, req.Name)
+		u, err := users.Register(r.Context(), req.Email, req.Password, req.Profile)
 		switch {
 		case err == nil:
 			accounts, _ := users.Accounts(r.Context(), u.ID)
@@ -367,7 +402,7 @@ func main() {
 			for _, a := range accounts {
 				logins = append(logins, a.Login)
 			}
-			writeJSON(w, http.StatusCreated, map[string]any{"id": u.ID, "email": u.Email, "name": u.Name, "accounts": logins})
+			writeJSON(w, http.StatusCreated, map[string]any{"id": u.ID, "email": u.Email, "name": u.Name, "accounts": logins, "user": userDTO(u)})
 		case errors.Is(err, errEmailTaken):
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "email already registered"})
 		case errors.Is(err, errInvalidInput):
@@ -392,26 +427,70 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		type dto struct {
-			Login     string  `json:"login"`
-			TypeID    int     `json:"typeId"`
-			Currency  string  `json:"currency"`
-			Balance   float64 `json:"balance"`
-			IsEnabled bool    `json:"isEnabled"`
-		}
-		out := make([]dto, 0, len(accounts))
+		out := make([]map[string]any, 0, len(accounts))
 		for _, a := range accounts {
-			out = append(out, dto{Login: strconv.FormatInt(a.Login, 10), TypeID: a.TypeID, Currency: a.Currency, Balance: a.Balance, IsEnabled: true})
+			row := accountDTO(a, broker)
+			row["isEnabled"] = true
+			out = append(out, row)
 		}
 		writeJSON(w, http.StatusOK, out)
 	})
+	// The user's own profile: GET reads it, PUT/PATCH replaces the editable
+	// fields (name, phone, country, city, language, timezone).
 	mux.HandleFunc("/client-api/me", func(w http.ResponseWriter, r *http.Request) {
 		u, ok := users.UserBySession(r.Context(), bearer(r))
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "email": u.Email, "name": u.Name, "createdAt": u.CreatedAt})
+		switch r.Method {
+		case http.MethodGet:
+			writeJSON(w, http.StatusOK, userDTO(u))
+		case http.MethodPut, http.MethodPatch:
+			var p Profile
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&p); err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+				return
+			}
+			updated, err := users.UpdateProfile(r.Context(), u.ID, p)
+			switch {
+			case err == nil:
+				writeJSON(w, http.StatusOK, userDTO(updated))
+			case errors.Is(err, errInvalidInput):
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			default:
+				log.Printf("users: update profile: %v", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user store unavailable"})
+			}
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+	// POST {currentPassword, newPassword}: other sessions are revoked.
+	mux.HandleFunc("/client-api/password", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		u, ok := users.UserBySession(r.Context(), bearer(r))
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		var req struct{ CurrentPassword, NewPassword string }
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req)
+		err := users.ChangePassword(r.Context(), u.ID, req.CurrentPassword, req.NewPassword)
+		switch {
+		case err == nil:
+			writeJSON(w, http.StatusOK, map[string]bool{"changed": true})
+		case errors.Is(err, errBadCredentials):
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "current password is wrong"})
+		case errors.Is(err, errInvalidInput):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		default:
+			log.Printf("users: change password: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user store unavailable"})
+		}
 	})
 
 	// ── Admin (ADMIN_TOKEN): list users, enable/disable ──────────────────────
@@ -430,41 +509,71 @@ func main() {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		type dto struct {
-			ID          int64      `json:"id"`
-			Email       string     `json:"email"`
-			Name        string     `json:"name"`
-			Enabled     bool       `json:"enabled"`
-			CreatedAt   time.Time  `json:"createdAt"`
-			LastLoginAt *time.Time `json:"lastLoginAt"`
-			Accounts    []int64    `json:"accounts"`
-		}
-		out := make([]dto, 0, len(list))
+		out := make([]map[string]any, 0, len(list))
 		for _, u := range list {
+			u := u
+			row := userDTO(&u)
+			row["enabled"] = u.Enabled
+			row["lastLoginAt"] = u.LastLoginAt
 			accounts, _ := users.Accounts(r.Context(), u.ID)
-			logins := make([]int64, 0, len(accounts))
+			rows := make([]map[string]any, 0, len(accounts))
 			for _, a := range accounts {
-				logins = append(logins, a.Login)
+				rows = append(rows, accountDTO(a, broker))
 			}
-			out = append(out, dto{u.ID, u.Email, u.Name, u.Enabled, u.CreatedAt, u.LastLoginAt, logins})
+			row["accounts"] = rows
+			out = append(out, row)
 		}
 		writeJSON(w, http.StatusOK, out)
 	}))
 	mux.HandleFunc("/admin/users/", adminOnly(func(w http.ResponseWriter, r *http.Request) {
-		// POST /admin/users/{id}/enabled  {"enabled": false}
+		// POST /admin/users/{id}/enabled {"enabled": false}
+		// POST /admin/users/{id}/kyc     {"status": "verified"}
+		// POST /admin/users/{id}/reset   — the user's accounts back to their
+		//                                   funded, empty starting state
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/admin/users/"), "/")
 		id, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil || len(parts) != 2 || parts[1] != "enabled" || r.Method != http.MethodPost {
+		if err != nil || len(parts) != 2 || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		var req struct{ Enabled bool }
-		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&req)
-		if err := users.SetEnabled(r.Context(), id, req.Enabled); err != nil {
+		switch parts[1] {
+		case "enabled":
+			var req struct{ Enabled bool }
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&req)
+			if err := users.SetEnabled(r.Context(), id, req.Enabled); err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": req.Enabled})
+		case "kyc":
+			var req struct{ Status string }
+			_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&req)
+			switch err := users.SetKYC(r.Context(), id, req.Status); {
+			case err == nil:
+				writeJSON(w, http.StatusOK, map[string]any{"id": id, "kycStatus": req.Status})
+			case errors.Is(err, errInvalidInput):
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "status must be unverified, pending or verified"})
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		case "reset":
+			accounts, err := users.Accounts(r.Context(), id)
+			if err != nil || len(accounts) == 0 {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			rows := make([]map[string]any, 0, len(accounts))
+			for _, a := range accounts {
+				balance := startingBalance(a)
+				broker.Reset(a.Login, balance)
+				a.Balance = balance
+				rows = append(rows, accountDTO(a, broker))
+			}
+			log.Printf("admin: user %d reset (%d accounts)", id, len(accounts))
+			writeJSON(w, http.StatusOK, map[string]any{"id": id, "accounts": rows})
+		default:
 			w.WriteHeader(http.StatusNotFound)
-			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": req.Enabled})
 	}))
 
 	// ── Everything else under /api → generic OK ─────────────────────────────

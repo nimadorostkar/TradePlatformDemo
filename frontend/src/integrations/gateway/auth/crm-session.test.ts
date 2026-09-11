@@ -394,3 +394,111 @@ describe('CrmAuthSession registration', () => {
     });
   });
 });
+
+describe('CrmAuthSession profile', () => {
+  const profileBody = {
+    id: 1,
+    email: 'trader@example.com',
+    name: 'Demo Trader',
+    phone: '+44 20 7946 0958',
+    country: 'GB',
+    city: 'London',
+    language: 'en',
+    timezone: 'Europe/London',
+    kycStatus: 'verified',
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-02T00:00:00Z',
+  };
+
+  function sessionWith(fetchImpl: typeof fetch, crmToken: string | null = 'crm-token') {
+    const store = new TokenStore({ legacyStorage: false });
+    if (crmToken) store.set({ gatewayToken: jwt('1010'), crmToken, expiresAt: null });
+    return new CrmAuthSession({
+      gatewayBaseUrl: 'https://trade.example/gateway',
+      crmBaseUrl: 'https://trade.example/crm',
+      tokenStore: store,
+      fetchImpl,
+    });
+  }
+
+  it('sends the optional sign-up details only when given', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 8, email: 'n@example.com', accounts: [100008] }), {
+        status: 201,
+      }),
+    ) as unknown as typeof fetch;
+    await sessionWith(fetchImpl, null).register({
+      email: 'n@example.com',
+      password: 'longenough1',
+      name: 'N',
+      phone: '+1 415 555 0100',
+      country: 'US',
+      timezone: 'America/Los_Angeles',
+    });
+    const [, init] = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+      .calls[0]!;
+    expect(JSON.parse(String(init.body))).toEqual({
+      email: 'n@example.com',
+      password: 'longenough1',
+      name: 'N',
+      phone: '+1 415 555 0100',
+      country: 'US',
+      timezone: 'America/Los_Angeles',
+    });
+  });
+
+  it('reads the profile with the CRM bearer', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(profileBody), { status: 200 }),
+      ) as unknown as typeof fetch;
+    const profile = await sessionWith(fetchImpl).profile();
+    expect(profile).toMatchObject({ country: 'GB', kycStatus: 'verified', city: 'London' });
+    const [url, init] = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+      .calls[0]!;
+    expect(url).toBe('https://trade.example/crm/client-api/me');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer crm-token');
+  });
+
+  it('updates the profile and surfaces a validation refusal', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...profileBody, city: 'Leeds' }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ error: 'invalid input: country must be a two-letter ISO code' }),
+          {
+            status: 400,
+          },
+        ),
+      ) as unknown as typeof fetch;
+    const session = sessionWith(fetchImpl);
+    const input = {
+      name: 'Demo Trader',
+      phone: '',
+      country: 'GB',
+      city: 'Leeds',
+      language: 'en',
+      timezone: 'Europe/London',
+    };
+    expect((await session.updateProfile(input)).city).toBe('Leeds');
+    const [, init] = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+      .calls[0]!;
+    expect(init.method).toBe('PUT');
+    await expect(session.updateProfile({ ...input, country: 'Britain' })).rejects.toMatchObject({
+      kind: 'validation',
+      message: 'invalid input: country must be a two-letter ISO code',
+    });
+  });
+
+  it('refuses to read a profile without a CRM token', async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    await expect(sessionWith(fetchImpl, null).profile()).rejects.toMatchObject({
+      kind: 'unauthorized',
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});

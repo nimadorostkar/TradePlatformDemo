@@ -4,6 +4,9 @@ import { selectAccount, useTradingStore } from '@/stores/trading-store';
 import { useSessionStore } from '@/stores/session-store';
 import { useAccountGroup } from '@/app/providers/use-account-group';
 import { StalenessBadge } from '@/features/system-messages/StalenessBadge';
+import { countryName } from '@/features/auth/countries';
+import { useProfile } from './use-profile';
+import type { KycStatus } from '@/integrations/gateway/auth/crm-session';
 
 /**
  * Account metrics.
@@ -109,7 +112,77 @@ export default function AccountSummaryWidget() {
           )}
         </Metric>
       </dl>
+
+      <ProfileSection />
     </div>
+  );
+}
+
+const KYC_LABEL: Record<KycStatus, string> = {
+  unverified: 'Not verified',
+  pending: 'Verification pending',
+  verified: 'Verified',
+};
+const KYC_TONE: Record<KycStatus, 'neutral' | 'warning' | 'positive'> = {
+  unverified: 'neutral',
+  pending: 'warning',
+  verified: 'positive',
+};
+
+/**
+ * The person behind the login, from the CRM profile. Shown under the account
+ * figures so a trader can confirm the terminal is signed in as THEM — and see
+ * the verification state a broker would gate withdrawals on. Absent fields
+ * say so rather than showing a blank cell.
+ */
+function ProfileSection() {
+  const profile = useProfile();
+  if (profile.isPending) {
+    return (
+      <p className="mt-3 text-2xs text-text-muted" role="status">
+        Loading profile…
+      </p>
+    );
+  }
+  if (profile.isError || !profile.data) {
+    return (
+      <p className="mt-3 text-2xs text-text-muted">
+        Profile unavailable
+        {profile.error instanceof Error ? ` — ${profile.error.message}` : ''}
+      </p>
+    );
+  }
+  const p = profile.data;
+  const place = [p.city, p.country ? countryName(p.country) : ''].filter(Boolean).join(', ');
+  const since = new Date(p.createdAt);
+  return (
+    <section className="mt-3" aria-label="Profile">
+      <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-wide text-text-muted">
+        Profile
+      </h4>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+        <Metric label="Name">{p.name || <Unavailable label="Not given" />}</Metric>
+        <Metric label="Email">
+          <span className="truncate" title={p.email}>
+            {p.email}
+          </span>
+        </Metric>
+        <Metric label="Phone">{p.phone || <Unavailable label="Not given" />}</Metric>
+        <Metric label="Location">{place || <Unavailable label="Not given" />}</Metric>
+        <Metric label="Language">{p.language}</Metric>
+        <Metric label="Time zone">{p.timezone}</Metric>
+        <Metric label="Identity">
+          <Badge tone={KYC_TONE[p.kycStatus]}>{KYC_LABEL[p.kycStatus]}</Badge>
+        </Metric>
+        <Metric label="Member since">
+          <span className="tabular">
+            {Number.isNaN(since.getTime())
+              ? '—'
+              : since.toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
+          </span>
+        </Metric>
+      </dl>
+    </section>
   );
 }
 

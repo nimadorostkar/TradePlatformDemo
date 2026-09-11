@@ -51,6 +51,73 @@ type User struct {
 	Enabled     bool
 	CreatedAt   time.Time
 	LastLoginAt *time.Time
+	Profile
+	// KYCStatus is the identity-verification state a real CRM would carry:
+	// unverified (fresh sign-up), pending (documents submitted), verified.
+	// Set by the admin API only; the user never grades themselves.
+	KYCStatus string
+	UpdatedAt time.Time
+}
+
+// Profile is the part of a user record the user may edit themselves.
+type Profile struct {
+	Name     string
+	Phone    string // E.164-ish, optional
+	Country  string // ISO 3166-1 alpha-2, optional
+	City     string
+	Language string // BCP 47 tag, "en" by default
+	Timezone string // IANA zone, "UTC" by default
+}
+
+const (
+	kycUnverified = "unverified"
+	kycPending    = "pending"
+	kycVerified   = "verified"
+)
+
+var (
+	phonePattern    = regexp.MustCompile(`^\+?[0-9][0-9 ()-]{5,19}$`)
+	countryPattern  = regexp.MustCompile(`^[A-Z]{2}$`)
+	languagePattern = regexp.MustCompile(`^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`)
+)
+
+// normalizeProfile trims, canonicalises and validates the editable fields;
+// blanks keep their defaults. Timezones must be real IANA zones so the
+// terminal can format times with them.
+func normalizeProfile(p Profile) (Profile, error) {
+	p.Name = strings.TrimSpace(p.Name)
+	p.Phone = strings.TrimSpace(p.Phone)
+	p.Country = strings.ToUpper(strings.TrimSpace(p.Country))
+	p.City = strings.TrimSpace(p.City)
+	p.Language = strings.TrimSpace(p.Language)
+	p.Timezone = strings.TrimSpace(p.Timezone)
+	if len(p.Name) > 80 {
+		return p, fmt.Errorf("%w: name", errInvalidInput)
+	}
+	if p.Phone != "" && !phonePattern.MatchString(p.Phone) {
+		return p, fmt.Errorf("%w: phone", errInvalidInput)
+	}
+	if p.Country != "" && !countryPattern.MatchString(p.Country) {
+		return p, fmt.Errorf("%w: country must be a two-letter ISO code", errInvalidInput)
+	}
+	if len(p.City) > 80 {
+		return p, fmt.Errorf("%w: city", errInvalidInput)
+	}
+	if p.Language == "" {
+		p.Language = "en"
+	} else if !languagePattern.MatchString(p.Language) {
+		return p, fmt.Errorf("%w: language", errInvalidInput)
+	}
+	if p.Timezone == "" {
+		p.Timezone = "UTC"
+	} else if _, err := time.LoadLocation(p.Timezone); err != nil {
+		return p, fmt.Errorf("%w: timezone", errInvalidInput)
+	}
+	return p, nil
+}
+
+func validKYC(status string) bool {
+	return status == kycUnverified || status == kycPending || status == kycVerified
 }
 
 type Account struct {
@@ -67,7 +134,13 @@ type UserStore interface {
 	// Authenticate checks the password and opens a session; the returned
 	// token is the CRM access token the client keeps.
 	Authenticate(ctx context.Context, email, password string) (*User, string, error)
-	Register(ctx context.Context, email, password, name string) (*User, error)
+	Register(ctx context.Context, email, password string, profile Profile) (*User, error)
+	// UpdateProfile replaces the user-editable fields and returns the record.
+	UpdateProfile(ctx context.Context, userID int64, profile Profile) (*User, error)
+	// ChangePassword requires the current password and revokes every other
+	// session of the user.
+	ChangePassword(ctx context.Context, userID int64, current, next string) error
+	SetKYC(ctx context.Context, userID int64, status string) error
 	// UserBySession resolves a CRM token; ok=false when unknown or expired.
 	UserBySession(ctx context.Context, token string) (*User, bool)
 	Accounts(ctx context.Context, userID int64) ([]Account, error)
@@ -83,15 +156,16 @@ type UserStore interface {
 
 func normalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 
-func validateRegistration(email, password, name string) error {
+func validateRegistration(email, password string) error {
 	if !emailPattern.MatchString(email) || len(email) > 254 {
 		return fmt.Errorf("%w: email", errInvalidInput)
 	}
+	return validatePassword(password)
+}
+
+func validatePassword(password string) error {
 	if len(password) < minPasswordLen || len(password) > 128 {
 		return fmt.Errorf("%w: password must be %d–128 characters", errInvalidInput, minPasswordLen)
-	}
-	if len(name) > 80 {
-		return fmt.Errorf("%w: name", errInvalidInput)
 	}
 	return nil
 }
@@ -118,6 +192,10 @@ const (
 	seedPassword = "correct-password"
 	seedName     = "Demo Trader"
 )
+
+// seedProfile is the demo trader's filled-in profile, so every screen that
+// shows user data has something to show on a fresh database.
+var seedProfile = Profile{Name: seedName, Phone: "+44 20 7946 0958", Country: "GB", City: "London", Language: "en", Timezone: "Europe/London"}
 
 var seedAccounts = []Account{
 	{Login: 1010, TypeID: 57, Currency: "USD", Balance: demoStartBalance},
@@ -156,6 +234,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions(user_id);
 CREATE SEQUENCE IF NOT EXISTS account_login_seq START WITH 100001;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS phone      TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS country    TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS city       TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS language   TEXT NOT NULL DEFAULT 'en',
+  ADD COLUMN IF NOT EXISTS timezone   TEXT NOT NULL DEFAULT 'UTC',
+  ADD COLUMN IF NOT EXISTS kyc_status TEXT NOT NULL DEFAULT 'unverified',
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 `
 
 func openPGStore(ctx context.Context, dsn string) (*pgStore, error) {
@@ -199,7 +285,8 @@ func (s *pgStore) seed(ctx context.Context) error {
 	}
 	defer tx.Rollback(ctx)
 	var id int64
-	if err := tx.QueryRow(ctx, `INSERT INTO users (email, password_hash, name) VALUES ($1,$2,$3) RETURNING id`, seedEmail, string(hash), seedName).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO users (email, password_hash, name, phone, country, city, language, timezone, kyc_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+		seedEmail, string(hash), seedProfile.Name, seedProfile.Phone, seedProfile.Country, seedProfile.City, seedProfile.Language, seedProfile.Timezone, kycVerified).Scan(&id); err != nil {
 		return err
 	}
 	for _, a := range seedAccounts {
@@ -216,20 +303,34 @@ func (s *pgStore) seed(ctx context.Context) error {
 
 func scanUser(row pgx.Row) (*User, error) {
 	var u User
-	if err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Enabled, &u.CreatedAt, &u.LastLoginAt); err != nil {
+	if err := row.Scan(userFields(&u)...); err != nil {
 		return nil, err
 	}
 	return &u, nil
 }
 
-const userColumns = `id, email, name, enabled, created_at, last_login_at`
+// userColumns and userFields are the one column list and its scan targets;
+// every user query goes through them so a new column is added in one place.
+const userColumns = `id, email, name, enabled, created_at, last_login_at, phone, country, city, language, timezone, kyc_status, updated_at`
+
+func userFields(u *User) []any {
+	return []any{&u.ID, &u.Email, &u.Name, &u.Enabled, &u.CreatedAt, &u.LastLoginAt, &u.Phone, &u.Country, &u.City, &u.Language, &u.Timezone, &u.KYCStatus, &u.UpdatedAt}
+}
+
+func qualifiedUserColumns(alias string) string {
+	parts := strings.Split(userColumns, ", ")
+	for i, c := range parts {
+		parts[i] = alias + "." + c
+	}
+	return strings.Join(parts, ", ")
+}
 
 func (s *pgStore) Authenticate(ctx context.Context, email, password string) (*User, string, error) {
 	email = normalizeEmail(email)
 	var u User
 	var hash string
 	err := s.pool.QueryRow(ctx, `SELECT `+userColumns+`, password_hash FROM users WHERE email = $1`, email).
-		Scan(&u.ID, &u.Email, &u.Name, &u.Enabled, &u.CreatedAt, &u.LastLoginAt, &hash)
+		Scan(append(userFields(&u), &hash)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Same cost as a real comparison, so timing does not reveal which
 		// emails exist.
@@ -259,10 +360,13 @@ func (s *pgStore) Authenticate(ctx context.Context, email, password string) (*Us
 	return &u, token, nil
 }
 
-func (s *pgStore) Register(ctx context.Context, email, password, name string) (*User, error) {
+func (s *pgStore) Register(ctx context.Context, email, password string, profile Profile) (*User, error) {
 	email = normalizeEmail(email)
-	name = strings.TrimSpace(name)
-	if err := validateRegistration(email, password, name); err != nil {
+	if err := validateRegistration(email, password); err != nil {
+		return nil, err
+	}
+	p, err := normalizeProfile(profile)
+	if err != nil {
 		return nil, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -274,8 +378,9 @@ func (s *pgStore) Register(ctx context.Context, email, password, name string) (*
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	u, err := scanUser(tx.QueryRow(ctx, `INSERT INTO users (email, password_hash, name) VALUES ($1,$2,$3)
-		ON CONFLICT (email) DO NOTHING RETURNING `+userColumns, email, string(hash), name))
+	u, err := scanUser(tx.QueryRow(ctx, `INSERT INTO users (email, password_hash, name, phone, country, city, language, timezone)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		ON CONFLICT (email) DO NOTHING RETURNING `+userColumns, email, string(hash), p.Name, p.Phone, p.Country, p.City, p.Language, p.Timezone))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errEmailTaken
 	}
@@ -296,7 +401,7 @@ func (s *pgStore) Register(ctx context.Context, email, password, name string) (*
 func (s *pgStore) UserBySession(ctx context.Context, token string) (*User, bool) {
 	// Columns are qualified: both tables carry created_at, and an ambiguous
 	// reference here read as "no session" for every valid token.
-	u, err := scanUser(s.pool.QueryRow(ctx, `SELECT u.id, u.email, u.name, u.enabled, u.created_at, u.last_login_at FROM users u
+	u, err := scanUser(s.pool.QueryRow(ctx, `SELECT `+qualifiedUserColumns("u")+` FROM users u
 		JOIN sessions se ON se.user_id = u.id
 		WHERE se.token_hash = $1 AND se.expires_at > now() AND u.enabled`, hashToken(token)))
 	if err != nil {
@@ -349,12 +454,63 @@ func (s *pgStore) ListUsers(ctx context.Context) ([]User, error) {
 	var out []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Name, &u.Enabled, &u.CreatedAt, &u.LastLoginAt); err != nil {
+		if err := rows.Scan(userFields(&u)...); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
 	}
 	return out, rows.Err()
+}
+
+func (s *pgStore) UpdateProfile(ctx context.Context, userID int64, profile Profile) (*User, error) {
+	p, err := normalizeProfile(profile)
+	if err != nil {
+		return nil, err
+	}
+	u, err := scanUser(s.pool.QueryRow(ctx, `UPDATE users SET name = $2, phone = $3, country = $4, city = $5, language = $6, timezone = $7, updated_at = now()
+		WHERE id = $1 RETURNING `+userColumns, userID, p.Name, p.Phone, p.Country, p.City, p.Language, p.Timezone))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errNotFound
+	}
+	return u, err
+}
+
+func (s *pgStore) ChangePassword(ctx context.Context, userID int64, current, next string) error {
+	if err := validatePassword(next); err != nil {
+		return err
+	}
+	var hash string
+	if err := s.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&hash); err != nil {
+		return errNotFound
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(current)) != nil {
+		return errBadCredentials
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(next), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, string(newHash)); err != nil {
+		return err
+	}
+	// Every other device is signed out; the caller's own session is
+	// re-established by the client with the new password.
+	_, _ = s.pool.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+	return nil
+}
+
+func (s *pgStore) SetKYC(ctx context.Context, userID int64, status string) error {
+	if !validKYC(status) {
+		return fmt.Errorf("%w: kyc status", errInvalidInput)
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE users SET kyc_status = $2, updated_at = now() WHERE id = $1`, userID, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errNotFound
+	}
+	return nil
 }
 
 func (s *pgStore) SetBalance(ctx context.Context, login int64, balance float64) error {
@@ -402,10 +558,11 @@ type session struct {
 
 func newMemStore() *memStore {
 	s := &memStore{users: map[int64]*User{}, hashes: map[int64]string{}, byEmail: map[string]int64{}, accounts: map[int64]Account{}, sessions: map[string]session{}, nextID: 1, nextLogin: 100001}
-	u, _ := s.Register(context.Background(), seedEmail, seedPassword, seedName)
+	u, _ := s.Register(context.Background(), seedEmail, seedPassword, seedProfile)
 	if u != nil {
 		// Replace the auto-created account with the documented seed set.
 		s.mu.Lock()
+		s.users[u.ID].KYCStatus = kycVerified
 		for login, a := range s.accounts {
 			if a.UserID == u.ID {
 				delete(s.accounts, login)
@@ -445,10 +602,13 @@ func (s *memStore) Authenticate(_ context.Context, email, password string) (*Use
 	return &copy, token, nil
 }
 
-func (s *memStore) Register(_ context.Context, email, password, name string) (*User, error) {
+func (s *memStore) Register(_ context.Context, email, password string, profile Profile) (*User, error) {
 	email = normalizeEmail(email)
-	name = strings.TrimSpace(name)
-	if err := validateRegistration(email, password, name); err != nil {
+	if err := validateRegistration(email, password); err != nil {
+		return nil, err
+	}
+	p, err := normalizeProfile(profile)
+	if err != nil {
 		return nil, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -460,7 +620,8 @@ func (s *memStore) Register(_ context.Context, email, password, name string) (*U
 	if _, taken := s.byEmail[email]; taken {
 		return nil, errEmailTaken
 	}
-	u := &User{ID: s.nextID, Email: email, Name: name, Enabled: true, CreatedAt: time.Now()}
+	now := time.Now()
+	u := &User{ID: s.nextID, Email: email, Name: p.Name, Enabled: true, CreatedAt: now, Profile: p, KYCStatus: kycUnverified, UpdatedAt: now}
 	s.nextID++
 	s.users[u.ID] = u
 	s.hashes[u.ID] = string(hash)
@@ -526,6 +687,63 @@ func (s *memStore) ListUsers(_ context.Context) ([]User, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
+}
+
+func (s *memStore) UpdateProfile(_ context.Context, userID int64, profile Profile) (*User, error) {
+	p, err := normalizeProfile(profile)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[userID]
+	if !ok {
+		return nil, errNotFound
+	}
+	u.Profile, u.Name, u.UpdatedAt = p, p.Name, time.Now()
+	copy := *u
+	return &copy, nil
+}
+
+func (s *memStore) ChangePassword(_ context.Context, userID int64, current, next string) error {
+	if err := validatePassword(next); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.hashes[userID]
+	if !ok {
+		return errNotFound
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(current)) != nil {
+		return errBadCredentials
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(next), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	s.hashes[userID] = string(newHash)
+	s.users[userID].UpdatedAt = time.Now()
+	for h, se := range s.sessions {
+		if se.userID == userID {
+			delete(s.sessions, h)
+		}
+	}
+	return nil
+}
+
+func (s *memStore) SetKYC(_ context.Context, userID int64, status string) error {
+	if !validKYC(status) {
+		return fmt.Errorf("%w: kyc status", errInvalidInput)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[userID]
+	if !ok {
+		return errNotFound
+	}
+	u.KYCStatus, u.UpdatedAt = status, time.Now()
+	return nil
 }
 
 func (s *memStore) SetBalance(_ context.Context, login int64, balance float64) error {

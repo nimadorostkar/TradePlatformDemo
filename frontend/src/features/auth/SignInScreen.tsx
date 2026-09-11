@@ -6,6 +6,7 @@ import { useBrand } from '@/app/providers/brand-provider';
 import { useServices } from '@/app/providers/services';
 import { TradingError } from '@/domain/common/errors';
 import { useSessionStore } from '@/stores/session-store';
+import { COUNTRIES } from './countries';
 
 /**
  * Sign-in.
@@ -27,6 +28,8 @@ export function SignInScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('');
   // Registration lives on the same screen: a new visitor creates a demo
   // account (user + funded account in the CRM's user store) and is signed in
   // with it immediately.
@@ -48,7 +51,16 @@ export function SignInScreen() {
       const trimmedEmail = email.trim();
       try {
         if (mode === 'register') {
-          await services.auth.register({ email: trimmedEmail, password, name: name.trim() });
+          await services.auth.register({
+            email: trimmedEmail,
+            password,
+            name: name.trim(),
+            phone: phone.trim(),
+            country,
+            // The browser's zone is the best default for a self-service
+            // sign-up; the profile can change it later.
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          });
         }
         setStatus('signing-in');
         await services.auth.signIn(trimmedEmail, password, { remember });
@@ -62,7 +74,19 @@ export function SignInScreen() {
         setSubmitting(false);
       }
     },
-    [submitting, services, mode, email, password, name, remember, setStatus, setUsername],
+    [
+      submitting,
+      services,
+      mode,
+      email,
+      password,
+      name,
+      phone,
+      country,
+      remember,
+      setStatus,
+      setUsername,
+    ],
   );
 
   return (
@@ -103,6 +127,40 @@ export function SignInScreen() {
                 className="h-9 text-sm max-lg:h-11"
               />
             </Field>
+          )}
+
+          {mode === 'register' && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Phone (optional)" htmlFor="signin-phone">
+                <Input
+                  id="signin-phone"
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  maxLength={20}
+                  placeholder="+44 20 7946 0958"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  className="h-9 text-sm max-lg:h-11"
+                />
+              </Field>
+              <Field label="Country (optional)" htmlFor="signin-country">
+                <select
+                  id="signin-country"
+                  autoComplete="country"
+                  value={country}
+                  onChange={(event) => setCountry(event.target.value)}
+                  className="h-9 w-full rounded-md border border-[var(--border-default)] bg-[var(--background-primary)] px-2 text-sm text-text-primary max-lg:h-11"
+                >
+                  <option value="">—</option>
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
           )}
 
           <Field label="Email" htmlFor="signin-email">

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { TradingError } from '@/domain/common/errors';
 import {
   crmAccountListSchema,
@@ -96,7 +97,7 @@ export class CrmAuthSession implements AuthSession {
    * is called directly (same-origin /crm), exactly like the account list.
    */
   async register(
-    input: { email: string; password: string; name?: string },
+    input: { email: string; password: string; name?: string } & Partial<ProfileInput>,
     signal?: AbortSignal,
   ): Promise<{ id: number; email: string; accounts: string[] }> {
     let response: Response;
@@ -108,6 +109,12 @@ export class CrmAuthSession implements AuthSession {
           email: input.email,
           password: input.password,
           name: input.name ?? '',
+          // Optional profile details; the CRM validates and defaults them.
+          ...(input.phone ? { phone: input.phone } : {}),
+          ...(input.country ? { country: input.country } : {}),
+          ...(input.city ? { city: input.city } : {}),
+          ...(input.language ? { language: input.language } : {}),
+          ...(input.timezone ? { timezone: input.timezone } : {}),
         }),
         signal,
         credentials: 'omit',
@@ -146,6 +153,83 @@ export class CrmAuthSession implements AuthSession {
       kind: 'unavailable',
       message: 'Could not create the account right now.',
       code: `crm.register.${response.status}`,
+    });
+  }
+
+  /**
+   * The signed-in user's CRM profile (GET /client-api/me). Distinct from the
+   * trading account: this is the person, not the login.
+   */
+  async profile(signal?: AbortSignal): Promise<UserProfile> {
+    const response = await this.crmFetch('/client-api/me', { method: 'GET', signal });
+    return parseProfile(await response.json());
+  }
+
+  /** Replaces the user-editable profile fields (PUT /client-api/me). */
+  async updateProfile(input: ProfileInput, signal?: AbortSignal): Promise<UserProfile> {
+    const response = await this.crmFetch('/client-api/me', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+      signal,
+    });
+    return parseProfile(await response.json());
+  }
+
+  /** Changes the password; the CRM revokes every other session. */
+  async changePassword(
+    input: { currentPassword: string; newPassword: string },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.crmFetch('/client-api/password', {
+      method: 'POST',
+      body: JSON.stringify(input),
+      signal,
+    });
+  }
+
+  /**
+   * A CRM call with the session's bearer. Non-2xx answers become the
+   * TradingError kinds the UI already knows how to show.
+   */
+  private async crmFetch(path: string, init: RequestInit): Promise<Response> {
+    const tokens = this.tokenStore.get();
+    if (!tokens?.crmToken) {
+      throw new TradingError({
+        kind: 'unauthorized',
+        message: 'Sign in again to load your profile.',
+        code: 'auth.no-crm-token',
+      });
+    }
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.crmBaseUrl}${path}`, {
+        ...init,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokens.crmToken}` },
+        credentials: 'omit',
+      });
+    } catch (error) {
+      throw TradingError.from(error);
+    }
+    if (response.ok) return response;
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    if (response.status === 401) {
+      throw new TradingError({
+        kind: 'unauthorized',
+        message: 'Your session has expired — sign in again.',
+        code: 'crm.profile.unauthorized',
+      });
+    }
+    if (response.status === 400 || response.status === 403) {
+      throw new TradingError({
+        kind: 'validation',
+        message: body.error ?? 'Please check the details and try again.',
+        code: `crm.profile.${response.status}`,
+      });
+    }
+    throw new TradingError({
+      kind: 'unavailable',
+      message: 'The profile service is not available right now.',
+      code: `crm.profile.${response.status}`,
     });
   }
 
@@ -502,4 +586,53 @@ function resolveKind(
   gatewaySuffixes: Map<string, GatewayAccountSuffixDto> | null,
 ): AccountFunds {
   return accountFundsOf(gatewaySuffixes?.get(account.login)?.accountKind);
+}
+
+/** The user-editable part of the CRM profile. */
+export interface ProfileInput {
+  name: string;
+  phone: string;
+  /** ISO 3166-1 alpha-2, or '' when not given. */
+  country: string;
+  city: string;
+  /** BCP 47 tag ('en'). */
+  language: string;
+  /** IANA zone ('UTC'). */
+  timezone: string;
+}
+
+export type KycStatus = 'unverified' | 'pending' | 'verified';
+
+export interface UserProfile extends ProfileInput {
+  id: number;
+  email: string;
+  kycStatus: KycStatus;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+const profileSchema = z.object({
+  id: z.number(),
+  email: z.string(),
+  name: z.string().default(''),
+  phone: z.string().default(''),
+  country: z.string().default(''),
+  city: z.string().default(''),
+  language: z.string().default('en'),
+  timezone: z.string().default('UTC'),
+  kycStatus: z.enum(['unverified', 'pending', 'verified']).catch('unverified'),
+  createdAt: z.string(),
+  updatedAt: z.string().nullish(),
+});
+
+function parseProfile(raw: unknown): UserProfile {
+  const parsed = profileSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new TradingError({
+      kind: 'contract',
+      message: 'The profile service answered in an unexpected shape.',
+      code: 'crm.profile.shape',
+    });
+  }
+  return { ...parsed.data, updatedAt: parsed.data.updatedAt ?? null };
 }

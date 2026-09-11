@@ -71,20 +71,30 @@ exposed to the terminal through the CRM contract (`/crm/...`). Schema
 
 | table | holds |
 |---|---|
-| `users` | id, email (unique), bcrypt `password_hash`, name, `enabled`, created/last-login timestamps |
+| `users` | id, email (unique), bcrypt `password_hash`, `enabled`, created/last-login/updated timestamps, and the profile: `name`, `phone`, `country` (ISO-2), `city`, `language` (BCP 47), `timezone` (IANA), `kyc_status` (unverified / pending / verified) |
 | `accounts` | trading `login` (PK), owning `user_id`, `type_id`, currency, balance |
 | `sessions` | sha256 `token_hash` (PK), `user_id`, `expires_at` — the CRM access token the client holds is never stored in clear |
 
 - **Sign-up** is self-service on the sign-in screen ("New here? Create a demo
-  account"): `POST /client-api/register {email,password,name}` creates the user
-  and one funded demo account (login from `account_login_seq`, starting 100001),
-  then the normal sign-in runs. Passwords: 8–128 characters. Duplicate emails → 409.
+  account"): `POST /client-api/register {email,password,name,phone?,country?,city?,language?,timezone?}`
+  creates the user and one funded demo account (login from `account_login_seq`,
+  starting 100001), then the normal sign-in runs. Passwords: 8–128 characters;
+  the profile fields are validated (real IANA zone, ISO-2 country) and default
+  to `en` / `UTC`. Duplicate emails → 409.
 - **Sign-in**: `POST /client-api/login` → 30-day session; `POST /client-api/accounts`
-  (Bearer) lists the user's accounts; `GET /client-api/me` describes the user.
+  (Bearer) lists the user's accounts with their live figures (balance, equity,
+  margin, free margin, leverage, open positions, pending orders).
   Disabled users cannot sign in and their sessions are revoked.
+- **Profile**: `GET /client-api/me` returns it (the terminal's Account panel
+  shows it under the figures); `PUT /client-api/me {name,phone,country,city,language,timezone}`
+  replaces the editable fields; `POST /client-api/password {currentPassword,newPassword}`
+  changes the password and signs every other session out.
 - **Admin** (`Authorization: Bearer $ADMIN_TOKEN`; 404 without it):
-  `GET /admin/users` lists users with their accounts and last login;
-  `POST /admin/users/{id}/enabled {"enabled":false}` disables (or re-enables) one.
+  `GET /admin/users` lists users with their profile, accounts and last login;
+  `POST /admin/users/{id}/enabled {"enabled":false}` disables (or re-enables) one;
+  `POST /admin/users/{id}/kyc {"status":"verified"}` sets the verification state;
+  `POST /admin/users/{id}/reset` empties the user's books (positions, orders,
+  history, deals) and refunds each account to its starting balance.
 - A fresh database is seeded with `trader@example.com` / `correct-password`
   (accounts 1010, 2020, 3030). The same PostgreSQL also holds the gateway's price
   alerts and saved workspaces (`POSTGRES_DSN`).
