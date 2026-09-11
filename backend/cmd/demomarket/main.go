@@ -68,7 +68,9 @@ func lookup(r *http.Request) (*instrument, bool) {
 	if ins, ok := bySymbol[name]; ok {
 		return ins, true
 	}
-	if name == "" || strings.ContainsAny(name, `*?\`) {
+	// A list or a glob is never a symbol name; answer with a real instrument
+	// rather than minting one called "EURUSD,USDJPY,…".
+	if name == "" || strings.ContainsAny(name, `*?\,`) {
 		return bySymbol["EURUSD"], true
 	}
 	clone := *bySymbol["EURUSD"]
@@ -76,6 +78,21 @@ func lookup(r *http.Request) (*instrument, bool) {
 	clone.Path = `Forex\Other\` + name
 	clone.Description = name
 	return &clone, false
+}
+
+// matchesMask applies an MT5 symbol mask: comma-separated globs, case-
+// insensitive, a bare name matching exactly.
+func matchesMask(mask, symbol string) bool {
+	for _, part := range strings.Split(strings.ToUpper(mask), ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if ok, err := path.Match(part, symbol); err == nil && ok {
+			return true
+		}
+	}
+	return false
 }
 
 func candlesJSON(ins *instrument, bars []Bar) string {
@@ -277,15 +294,14 @@ func main() {
 	})
 	mux.HandleFunc("/api/symbol/get", func(w http.ResponseWriter, r *http.Request) {
 		if mask := r.URL.Query().Get("mask"); mask != "" {
+			// MT5 masks are a comma-separated list of globs ("*EUR*,XAU*");
+			// the gateway substitutes its default symbol list for an empty
+			// search. Only real matches are returned — never an invented one.
 			var rows []string
 			for _, ins := range instruments {
-				if ok, _ := path.Match(strings.ToUpper(mask), ins.Symbol); ok {
+				if matchesMask(mask, ins.Symbol) {
 					rows = append(rows, symbolJSON(ins))
 				}
-			}
-			if len(rows) == 0 {
-				ins, _ := lookup(r)
-				rows = append(rows, symbolJSON(ins))
 			}
 			j(w, `{"retcode":"0 Done","answer":[`+strings.Join(rows, ",")+`]}`)
 			return

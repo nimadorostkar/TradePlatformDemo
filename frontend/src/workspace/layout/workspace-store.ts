@@ -447,6 +447,10 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
   },
 
   setActiveSymbol: (symbol) => {
+    // A symbol name never contains a list delimiter or whitespace. A value
+    // like "EURUSD,USDJPY,…" — a search mask or a default-list echo — would
+    // otherwise become the chart, ticket and watchlist symbol at once.
+    if (!isPlausibleSymbol(symbol)) return;
     // Any ordinary selection ends the URL's claim on the chart.
     if (get().urlSymbolIntent !== null && get().urlSymbolIntent !== symbol) {
       set({ urlSymbolIntent: null });
@@ -732,6 +736,11 @@ export function openWidgetIds(workspace: Workspace): ReadonlySet<string> {
 // Selectors
 export const selectWorkspace = (s: WorkspaceState) => s.workspace;
 export const selectActiveSymbol = (s: WorkspaceState) => s.workspace.activeSymbol;
+
+/** MT5 symbol names: 1–32 visible characters, no list delimiters or spaces. */
+export function isPlausibleSymbol(symbol: string): boolean {
+  return symbol.length > 0 && symbol.length <= 32 && !/[,\s*?]/.test(symbol);
+}
 export const selectTheme = (s: WorkspaceState) => s.workspace.theme;
 export const selectRegions = (s: WorkspaceState) => s.workspace.regions;
 export const selectActiveWatchlist = (s: WorkspaceState) =>
