@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, signIn, test } from './fixtures/gateway';
 
 /**
@@ -11,9 +12,39 @@ import { expect, signIn, test } from './fixtures/gateway';
  * production.
  */
 
-const CREATE_ACCOUNT_URL = 'https://client.example.com/accounts';
+const CREATE_ACCOUNT_URL = 'https://portal.broker.test/accounts';
+
+/**
+ * The built-in brand names no portal, so the button only exists when a
+ * deployment's brand document says where accounts are opened. Provide one the
+ * way production does: runtime-config.js points at a brand JSON.
+ */
+async function installBrokerBrand(page: Page): Promise<void> {
+  await page.route('**/runtime-config.js*', (route) =>
+    route.fulfill({
+      contentType: 'application/javascript',
+      body: 'window.__RUNTIME_CONFIG__ = { VITE_BRAND_CONFIG_URL: "/brand/broker.json" };',
+    }),
+  );
+  await page.route('**/brand/broker.json', (route) =>
+    route.fulfill({
+      json: {
+        brokerName: 'Broker',
+        platformName: 'Broker Terminal',
+        logoUrl: '/brand/tradeplatform-logo.svg',
+        primaryColor: '#3366ee',
+        secondaryColor: '#6c8cff',
+        createAccountUrl: CREATE_ACCOUNT_URL,
+      },
+    }),
+  );
+}
 
 test.describe('no tradable account', () => {
+  test.beforeEach(async ({ page }) => {
+    await installBrokerBrand(page);
+  });
+
   test('offers Create Account instead of a dead end', async ({ page, gateway }) => {
     void gateway;
     // A profile the CRM knows but with nothing the terminal can trade.
@@ -58,6 +89,7 @@ test.describe('no tradable account', () => {
 test.describe('expired session', () => {
   test('offers Create Account beside signing back in', async ({ page, gateway }) => {
     void gateway;
+    await installBrokerBrand(page);
     await signIn(page);
 
     // The gateway stops accepting the session while the terminal is OPEN. A

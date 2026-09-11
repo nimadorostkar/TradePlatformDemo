@@ -5,7 +5,13 @@ import { CreateAccountButton } from './CreateAccountButton';
 
 // The brand arrives over the network at runtime; stubbing the hook keeps this
 // about the button rather than about branding.
-let brand: BrandConfig = DEFAULT_BRAND;
+// The built-in brand has no portal, so the button's happy path needs a brand
+// that says where accounts are opened — as a deployment's brand document would.
+const BROKER_BRAND: BrandConfig = {
+  ...DEFAULT_BRAND,
+  createAccountUrl: 'https://portal.broker.test/accounts',
+};
+let brand: BrandConfig = BROKER_BRAND;
 vi.mock('@/app/providers/brand-provider', () => ({ useBrand: () => brand }));
 
 /**
@@ -16,10 +22,10 @@ vi.mock('@/app/providers/brand-provider', () => ({ useBrand: () => brand }));
 
 afterEach(() => {
   vi.restoreAllMocks();
-  brand = DEFAULT_BRAND;
+  brand = BROKER_BRAND;
 });
 
-function renderWith(config: BrandConfig = DEFAULT_BRAND) {
+function renderWith(config: BrandConfig = BROKER_BRAND) {
   brand = config;
   return render(<CreateAccountButton />);
 }
@@ -38,7 +44,7 @@ describe('the Create Account button', () => {
     // `noopener` matters beyond convention here: without it the opened page can
     // reach back through `window.opener` into a signed-in trading terminal.
     expect(open).toHaveBeenCalledWith(
-      DEFAULT_BRAND.createAccountUrl,
+      BROKER_BRAND.createAccountUrl,
       '_blank',
       'noopener,noreferrer',
     );
@@ -48,7 +54,7 @@ describe('the Create Account button', () => {
     // A missing URL yields no button rather than one pointing somewhere
     // invented — a wrong destination on this button sends real people to the
     // wrong place to hand over their identity documents.
-    const { container } = renderWith({ ...DEFAULT_BRAND, createAccountUrl: undefined });
+    const { container } = renderWith(DEFAULT_BRAND);
     expect(container.textContent).toBe('');
   });
 

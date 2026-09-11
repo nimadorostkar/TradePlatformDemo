@@ -96,6 +96,35 @@ and `/crm/` same-origin — the production layout — in front of the **frontend
   that goes away.
 - Every container restarts with Docker; the stack survives a reboot.
 
+### CI/CD
+
+`.github/workflows/deploy.yml` runs on every push and pull request:
+
+1. **Verify** — legacy-reference guard (`scripts/check-no-legacy-refs.sh`), Go
+   fmt/vet/tests, TypeScript typecheck, ESLint, Prettier, Vitest.
+2. **Deploy** (push to `main` only, GitHub environment `production`) — runs
+   `deploy/deploy.sh` against the server over SSH.
+
+One-time setup with a key that exists **only** for this pipeline (never reuse a
+personal or previous key):
+
+```bash
+ssh-keygen -t ed25519 -N '' -C tradeplatform-github-actions -f /tmp/ci_deploy_key
+ssh-copy-id -i /tmp/ci_deploy_key.pub -o IdentityFile=~/.ssh/<your-admin-key> root@<server>
+
+gh secret set DEPLOY_HOST        --body '<server ip>'
+gh secret set DEPLOY_USER        --body 'root'
+gh secret set DEPLOY_SSH_KEY     < /tmp/ci_deploy_key
+gh secret set DEPLOY_KNOWN_HOSTS --body "$(ssh-keyscan -t ed25519 <server ip> 2>/dev/null)"
+gh variable set PUBLIC_ORIGIN    --body 'http://<server ip>:8080'
+rm /tmp/ci_deploy_key /tmp/ci_deploy_key.pub      # the private key now lives only in GitHub
+```
+
+Optional: `gh secret set TRADINGVIEW_PACKAGE_URL --body '<private tarball URL>'`
+installs your licensed Charting Library into the build; without it the terminal
+deploys without a chart. The deploy job fails with an explicit message until the
+secrets above exist — it never deploys half-configured.
+
 ## Verifying locally
 
 ```bash

@@ -70,12 +70,11 @@ export const DEFAULT_BRAND: BrandConfig = {
   primaryColor: '#3366ee',
   secondaryColor: '#6c8cff',
   legalLinks: [],
-  createAccountUrl: 'https://client.example.com/accounts',
-  // Verified live against the CRM's own sign-in page (2026-08-25): these are
-  // the routes its "Forgot Password" and "Sign up" links point at.
-  forgotPasswordUrl: 'https://client.example.com/auth/reset-password',
-  signUpUrl: 'https://client.example.com/auth/sign-up',
-  supportUrl: 'https://example.com/company/contact-us',
+  // No outbound links by default: the built-in identity belongs to no broker,
+  // so there is nowhere truthful to send a visitor. A deployment enables
+  // "Open an account", "Forgot password?" and "Contact support" by serving a
+  // brand document (VITE_BRAND_CONFIG_URL) with its own portal URLs — the UI
+  // hides each link whose URL is absent.
   defaultTheme: 'dark',
 };
 

@@ -37,6 +37,7 @@ test: ## Unit tests for both packages
 	cd frontend && npm test
 
 .PHONY: check
-check: ## Full verification: fmt/vet/test (Go) + typecheck/lint/format/test (web)
+check: ## Full verification: legacy-ref guard + fmt/vet/test (Go) + typecheck/lint/format/test (web)
+	./scripts/check-no-legacy-refs.sh
 	$(MAKE) -C backend check
 	cd frontend && npm run typecheck && npm run lint && npm run format:check && npm test
