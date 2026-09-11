@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 # The in-repo market-data + demo broker service (cmd/demomarket): real prices
-# from Yahoo Finance behind the MT5 Manager API and CRM contracts. Needs
-# outbound HTTPS to query1.finance.yahoo.com; no key, no account.
+# from Yahoo Finance and Binance behind the MT5 Manager API and CRM contracts.
+# Needs outbound HTTPS/WSS to query1.finance.yahoo.com, api.binance.com and
+# stream.binance.com; no key, no account.
 
 FROM golang:1.26.6 AS build
 WORKDIR /src

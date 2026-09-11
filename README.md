@@ -2,8 +2,8 @@
 
 A full-stack **demo** trading platform in one repository. It never connects to a
 real broker: the gateway's only upstream is the built-in `demomarket` service, which
-serves **real market prices** (live FX and crypto, years of history) from Yahoo
-Finance's public endpoints — no account, no key — in front of a demo account whose
+serves **real market prices** (live FX, tick-level crypto, years of history) from
+Yahoo Finance and Binance's public endpoints — no account, no key — in front of a demo account whose
 position and equity follow those prices. Nothing real is ever traded.
 
 | Package                    | What it is                                                                                              | Stack                                 |
@@ -34,10 +34,11 @@ make dev                          # demomarket :5199 → gateway :5063 → termi
 Open <http://localhost:3100> and sign in with `trader@example.com` /
 `correct-password`. Everything the terminal does — login, account list, quotes,
 chart history, positions, orders, the `/ws` stream — goes through the Go gateway;
-prices come from `backend/cmd/demomarket`, which pulls **real data** for ten
-instruments (seven FX majors, gold futures, BTC, ETH) from Yahoo Finance: live
-ticks every 3 s, true 1-minute candles for the last week, daily candles for years.
-Gold is exchange-delayed (~10 min, and labelled so); FX and crypto are real-time.
+prices come from `backend/cmd/demomarket`, which serves **real data** for ten
+instruments without any key: seven FX majors and gold futures from Yahoo Finance
+(live FX, true 1-minute candles for the last week, daily candles for years; gold
+is exchange-delayed ~10 min and labelled so), and BTC/ETH tick-by-tick from
+Binance's public WebSocket, falling back to Yahoo wherever Binance is unreachable.
 `-source synthetic` runs it offline on a deterministic generator instead.
 Ctrl-C stops all three processes.
 

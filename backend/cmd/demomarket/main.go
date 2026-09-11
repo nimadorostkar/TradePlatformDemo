@@ -5,10 +5,12 @@
 // gateway runs unmodified and never needs, or has, a connection to a trading
 // server.
 //
-// Prices are REAL: by default they come from Yahoo Finance's public endpoints
-// (yahoo.go) — live FX and crypto, exchange-delayed gold futures, years of
-// history — without any account or key. `-source synthetic` swaps in a
-// deterministic generator for offline work and tests.
+// Prices are REAL: by default FX and gold come from Yahoo Finance's public
+// endpoints (yahoo.go — live FX, exchange-delayed gold futures, years of
+// history) and crypto streams tick-by-tick from Binance's public WebSocket
+// (binance.go), falling back to Yahoo when Binance is unreachable. No account
+// or key anywhere. `-source synthetic` swaps in a deterministic generator for
+// offline work and tests.
 //
 // The broker side is a demo: one sample account whose position, pending
 // order and equity follow the live EURUSD price, plus canned deals/history.
@@ -164,7 +166,15 @@ func main() {
 	case "live":
 		y := newYahooProvider()
 		y.Start(context.Background())
-		provider = y
+		var crypto []*instrument
+		for _, ins := range instruments {
+			if ins.Binance != "" {
+				crypto = append(crypto, ins)
+			}
+		}
+		bn := newBinanceProvider(crypto)
+		bn.Start(context.Background())
+		provider = compositeProvider{binance: bn, yahoo: y}
 	default:
 		log.Fatalf("unknown -source %q (live|synthetic)", *source)
 	}

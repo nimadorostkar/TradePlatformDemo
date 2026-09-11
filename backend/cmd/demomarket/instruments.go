@@ -42,6 +42,9 @@ type instrument struct {
 	Digits      int
 	// Yahoo is the Yahoo Finance ticker this instrument's real data comes from.
 	Yahoo string
+	// Binance, when set, is the Binance spot pair streamed tick-by-tick (used
+	// in preference to Yahoo whenever the stream is live).
+	Binance string
 	// SpreadPoints is the nominal bid/ask spread in price units — real venues
 	// publish a single price for FX and futures; a broker's spread is applied
 	// around it, and this is the demo broker's.
@@ -68,8 +71,8 @@ var instruments = []*instrument{
 	{Symbol: "USDCHF", Description: "US Dollar vs Swiss Franc", Path: `Forex\Majors\USDCHF`, Base: "USD", Profit: "CHF", Digits: 5, Yahoo: "USDCHF=X", SpreadPoints: 0.00015, Sessions: weekdays, Price: 0.8800, Vol: 0.012, seed: 16},
 	{Symbol: "NZDUSD", Description: "New Zealand Dollar vs US Dollar", Path: `Forex\Minors\NZDUSD`, Base: "NZD", Profit: "USD", Digits: 5, Yahoo: "NZDUSD=X", SpreadPoints: 0.00018, Sessions: weekdays, Price: 0.6000, Vol: 0.016, seed: 17},
 	{Symbol: "XAUUSD", Description: "Gold vs US Dollar (COMEX futures, exchange-delayed)", Path: `Metals\Spot\XAUUSD`, Base: "XAU", Profit: "USD", Digits: 2, Yahoo: "GC=F", SpreadPoints: 0.30, Sessions: weekdays, Price: 2400.00, Vol: 0.030, seed: 21},
-	{Symbol: "BTCUSD", Description: "Bitcoin vs US Dollar", Path: `Crypto\Majors\BTCUSD`, Base: "BTC", Profit: "USD", Digits: 2, Yahoo: "BTC-USD", SpreadPoints: 12.0, Sessions: allWeek, Price: 65000.0, Vol: 0.090, seed: 31},
-	{Symbol: "ETHUSD", Description: "Ethereum vs US Dollar", Path: `Crypto\Majors\ETHUSD`, Base: "ETH", Profit: "USD", Digits: 2, Yahoo: "ETH-USD", SpreadPoints: 0.80, Sessions: allWeek, Price: 3200.0, Vol: 0.110, seed: 32},
+	{Symbol: "BTCUSD", Description: "Bitcoin vs US Dollar (Binance BTC/USDT)", Path: `Crypto\Majors\BTCUSD`, Base: "BTC", Profit: "USD", Digits: 2, Yahoo: "BTC-USD", Binance: "BTCUSDT", SpreadPoints: 12.0, Sessions: allWeek, Price: 65000.0, Vol: 0.090, seed: 31},
+	{Symbol: "ETHUSD", Description: "Ethereum vs US Dollar (Binance ETH/USDT)", Path: `Crypto\Majors\ETHUSD`, Base: "ETH", Profit: "USD", Digits: 2, Yahoo: "ETH-USD", Binance: "ETHUSDT", SpreadPoints: 0.80, Sessions: allWeek, Price: 3200.0, Vol: 0.110, seed: 32},
 }
 
 var bySymbol = func() map[string]*instrument {
