@@ -37,6 +37,6 @@ test: ## Unit tests for both packages
 	cd frontend && npm test
 
 .PHONY: check
-check: ## Everything CI runs locally: fmt/vet/test (Go) + typecheck/lint/format/test (web)
+check: ## Full verification: fmt/vet/test (Go) + typecheck/lint/format/test (web)
 	$(MAKE) -C backend check
 	cd frontend && npm run typecheck && npm run lint && npm run format:check && npm test

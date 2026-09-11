@@ -49,8 +49,7 @@ The broker IP-whitelists its Manager API, so real MT5 data only flows from a
 whitelisted host — locally you will see the sign-in screen but no accounts.
 
 The licensed TradingView package is **never committed**; `tv:sync` copies it in
-locally and CI restores it from a private artifact. Without it the chart will not
-load and the build fails on purpose — see
+locally. Without it the chart will not load and the build fails on purpose — see
 [`frontend/docs/architecture/tradingview-asset-strategy.md`](frontend/docs/architecture/tradingview-asset-strategy.md).
 
 ## Layout
@@ -59,16 +58,12 @@ load and the build fails on purpose — see
 .
 ├── frontend/          # web terminal (Vite app; own package.json, tests, deploy/)
 ├── backend/           # Go gateway (own go.mod, Makefile, deploy/, docs/)
-├── .github/workflows/
-│   ├── frontend.yml   # typecheck · lint · unit · build · e2e · deploy   (paths: frontend/**)
-│   └── backend.yml    # fmt · vet · race · govulncheck · store · e2e · artifacts (paths: backend/**)
 ├── scripts/dev.sh     # `make dev`: mock MT5/CRM + gateway + Vite, one Ctrl-C
 └── Makefile           # root fan-out: setup / dev / build / test / check
 ```
 
-The two workflows are path-filtered, so a change in one package does not run the
-other's pipeline. All `run:` steps use `working-directory`, and every path handed to
-an action is repo-relative (`frontend/…`, `backend/…`).
+There is no CI/CD in this repository; `make check` is the full verification
+suite and is run locally.
 
 ## Verifying locally
 
