@@ -503,11 +503,11 @@ Common cases:
 | No price-history rows | jobs role off or DB down | DB up + `ROLES` includes `jobs`; restart |
 | Log file growth | — | rotated automatically (`LOG_FILE` + lumberjack) |
 
-VPS quick ops:
-```powershell
-schtasks /query /tn OpoGatewayGo
-Get-Content C:\opomtsocket-go\logs\gateway.log -Tail 50
-schtasks /end /tn OpoGatewayGo ; schtasks /run /tn OpoGatewayGo   # restart
+Compose quick ops (on the host, in `deploy/`):
+```bash
+docker compose ps
+docker compose logs --tail 100 gateway
+docker compose restart gateway
 ```
 
 ---
