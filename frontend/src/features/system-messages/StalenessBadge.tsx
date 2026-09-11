@@ -20,10 +20,13 @@ export function StalenessBadge({
   const staleAfterMs = env().quoteStaleAfterMs;
   const age = useAge(freshness.updatedAt);
 
+  // "Streaming", not "Live": this badge is about the freshness of the feed.
+  // Whether the money is real is the account's DEMO/LIVE badge in the header,
+  // and one word must not be allowed to mean both.
   if (freshness.connection === 'connected' && age !== null && age < staleAfterMs) {
     return (
       <Badge tone="positive" className={className}>
-        Live
+        Streaming
       </Badge>
     );
   }

@@ -68,6 +68,10 @@ fi
 sed -e "s|__PUBLIC_ORIGIN__|$PUBLIC_ORIGIN|g" -e "s|__PUBLIC_WS_ORIGIN__|$PUBLIC_WS_ORIGIN|g" \
     -e "s|^APP_ENV=.*|APP_ENV=$APP_ENV|" -e "s|__VERSION__|$VERSION|g" frontend.env.example > frontend.env
 EDGE_PORT='$EDGE_PORT' docker compose up -d --build --remove-orphans
+# edge/nginx.conf is bind-mounted: a changed file is not re-read until nginx
+# reloads, so an upstream rename would otherwise 502 until the next restart.
+docker compose exec -T edge nginx -c /etc/nginx/edge/nginx.conf -t >/dev/null \
+  && docker compose exec -T edge nginx -c /etc/nginx/edge/nginx.conf -s reload
 docker image prune -f >/dev/null
 docker compose ps
 REMOTE

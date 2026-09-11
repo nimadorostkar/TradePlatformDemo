@@ -17,8 +17,12 @@ services:
     restart: unless-stopped
     ports:
       - "${EDGE_PORT:-8080}:80"
+    # The DIRECTORY is mounted, not the file: rsync replaces nginx.conf with a
+    # new inode on every deploy, and a single-file bind mount would keep the
+    # container on the old one (an upstream rename then 502s until a restart).
     volumes:
-      - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./edge:/etc/nginx/edge:ro
+    command: ["nginx", "-c", "/etc/nginx/edge/nginx.conf", "-g", "daemon off;"]
     depends_on:
       frontend:
         condition: service_healthy
