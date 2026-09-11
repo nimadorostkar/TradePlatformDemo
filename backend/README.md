@@ -1,9 +1,12 @@
 # TradePlatform Gateway (backend)
 
 > **Demo platform.** In this repository the gateway's only upstream is
-> [`cmd/demomarket`](cmd/demomarket/main.go), a simulator that speaks the MT5
-> Manager Web API and CRM contracts with synthetic prices and sample accounts.
-> No real trading server is configured, reachable, or required anywhere.
+> [`cmd/demomarket`](cmd/demomarket/main.go), which speaks the MT5 Manager
+> Web API and CRM contracts: real market prices (Yahoo Finance / Binance, or
+> `-source synthetic` offline) in front of a demo execution engine
+> ([`broker.go`](cmd/demomarket/broker.go)) that fills, manages and settles
+> orders against them. No real trading server is configured, reachable, or
+> required anywhere.
 
 A **Go** gateway, ported from a .NET 8 service (**LegacyMTSocket**), that sits between
 the web terminal and an MT5-Manager-API-shaped upstream. It exposes that API as REST

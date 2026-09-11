@@ -3,8 +3,10 @@
 A full-stack **demo** trading platform in one repository. It never connects to a
 real broker: the gateway's only upstream is the built-in `demomarket` service, which
 serves **real market prices** (live FX, tick-level crypto, years of history) from
-Yahoo Finance and Binance's public endpoints — no account, no key — in front of a demo account whose
-position and equity follow those prices. Nothing real is ever traded.
+Yahoo Finance and Binance's public endpoints — no account, no key — in front of a
+**demo execution engine**: market and pending orders fill against those prices,
+stops and targets fire, margin is checked and equity follows the open book.
+Nothing real is ever traded — the counterparty is the `demomarket` process.
 
 | Package                    | What it is                                                                                              | Stack                                 |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------- |
@@ -88,6 +90,30 @@ exposed to the terminal through the CRM contract (`/crm/...`). Schema
   alerts and saved workspaces (`POSTGRES_DSN`).
 - Locally, `make dev` starts a PostgreSQL container when Docker is running
   (`USERS_DSN`); without Docker the user store runs in memory with the same seed.
+
+## Trading (the demo broker)
+
+`demomarket` is a complete hedging broker on the MT5 Manager API contract
+(`backend/cmd/demomarket/broker.go`) — the gateway and the terminal talk to it
+exactly as they would to a trading server:
+
+- **Market orders** fill at the live ask (buy) / bid (sell), with optional SL/TP;
+  a close is the opposite side against the position id, in full or in part, and
+  the realised profit settles into the balance (mirrored to the user store).
+- **Pending orders** — limit, stop and stop-limit — rest until the market reaches
+  them (limits never fill worse than their price), can be modified or cancelled,
+  and expire on their GTD/day lifetime.
+- **Stops and targets** are evaluated every 250 ms against bid (buys) / ask
+  (sells); a **stop-out** closes the most losing position while the margin
+  level is at or under 50 %.
+- **Margin** is notional ÷ account leverage (default 1:100, changeable from the
+  terminal's *Adjust* control; choices in `LEVERAGE_CHOICES`), converted to USD
+  through the listed USD pairs; gold is a 100 oz contract, crypto a 1-coin one.
+- Every fill books an **order** (history) and a **deal**; rejections come back as
+  MT5 retcodes (`10019 No money`, `10016 Invalid stops`, `10015 Invalid price`,
+  `10014 Invalid volume`, `10018 Market closed`, …) that the terminal explains.
+- The book persists in `BROKER_STATE_FILE` (`.dev-logs/broker-state.json`
+  under `make dev`, a Docker volume in the compose stack); delete it to reset.
 
 ## Deploying to a server
 

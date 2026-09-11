@@ -12,8 +12,10 @@
 // or key anywhere. `-source synthetic` swaps in a deterministic generator for
 // offline work and tests.
 //
-// The broker side is a demo: one sample account whose position, pending
-// order and equity follow the live EURUSD price, plus canned deals/history.
+// The broker side is a demo execution engine (broker.go): market and pending
+// orders fill against the live prices, stops and targets fire, margin is
+// checked and equity follows the open positions. Nothing is real — the
+// counterparty is this process — but the wire contract is MT5's.
 //
 // Usage: go run ./cmd/demomarket [-addr :5199] [-source live|synthetic]
 //
@@ -28,6 +30,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -35,7 +38,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -51,8 +53,8 @@ func ftoa(v float64, digits int) string { return strconv.FormatFloat(v, 'f', dig
 
 func symbolJSON(ins *instrument) string {
 	multiply := math.Pow(10, float64(ins.Digits))
-	return fmt.Sprintf(`{"Symbol":%q,"Path":%q,"Description":%q,"Sector":"Currency","Industry":"Forex","CurrencyBase":%q,"CurrencyProfit":%q,"Digits":%d,"Multiply":%d,"ContractSize":100000,"VolumeMin":1000,"VolumeMax":5000000,"VolumeStep":1000,"VolumeMinExt":0,"SessionsTrades":%s}`,
-		ins.Symbol, strings.ReplaceAll(ins.Path, `\`, `\\`), ins.Description, ins.Base, ins.Profit, ins.Digits, int64(multiply), ins.Sessions)
+	return fmt.Sprintf(`{"Symbol":%q,"Path":%q,"Description":%q,"Sector":"Currency","Industry":"Forex","CurrencyBase":%q,"CurrencyProfit":%q,"Digits":%d,"Multiply":%d,"ContractSize":%d,"VolumeMin":%d,"VolumeMax":%d,"VolumeStep":%d,"VolumeMinExt":0,"SessionsTrades":%s}`,
+		ins.Symbol, strings.ReplaceAll(ins.Path, `\`, `\\`), ins.Description, ins.Base, ins.Profit, ins.Digits, int64(multiply), int64(ins.contract()), volumeMin, volumeMax, volumeStep, ins.Sessions)
 }
 
 func tickJSON(ins *instrument, t Tick) string {
@@ -108,71 +110,6 @@ func candlesJSON(ins *instrument, bars []Bar) string {
 	return sb.String()
 }
 
-// ── Demo broker: one account that follows the live EURUSD price ─────────────
-
-type demoBroker struct {
-	provider Provider
-	mu       sync.Mutex
-	anchor   float64 // EURUSD price when the position was "opened"
-}
-
-const (
-	demoLogin    = 1010
-	demoBalance  = 10000.50
-	demoLots     = 1.0     // the sample position's size
-	contractSize = 100000. // units per lot
-)
-
-// entry fixes the sample position's open price to the first live price seen,
-// slightly below it so the demo starts in modest profit.
-func (b *demoBroker) entry() (open, current float64, ok bool) {
-	ins := bySymbol["EURUSD"]
-	t, ok := b.provider.Tick(ins)
-	if !ok {
-		return 0, 0, false
-	}
-	b.mu.Lock()
-	if b.anchor == 0 {
-		b.anchor = ins.round(t.Bid - 0.0005)
-	}
-	open = b.anchor
-	b.mu.Unlock()
-	return open, t.Bid, true
-}
-
-func (b *demoBroker) profit() float64 {
-	open, current, ok := b.entry()
-	if !ok {
-		return 0
-	}
-	return math.Round((current-open)*demoLots*contractSize*100) / 100
-}
-
-func (b *demoBroker) positionJSON() string {
-	open, current, ok := b.entry()
-	if !ok {
-		open, current = 1.0800, 1.0800
-	}
-	return fmt.Sprintf(`{"Position":555001,"ExternalID":"","Login":%d,"Symbol":"EURUSD","Action":0,"TimeCreate":%d,"PriceOpen":%s,"PriceCurrent":%s,"PriceSL":%s,"PriceTP":%s,"Volume":%d,"Profit":%s,"Storage":-1.25}`,
-		demoLogin, time.Now().Add(-26*time.Hour).Unix(), ftoa(open, 5), ftoa(current, 5), ftoa(open-0.0100, 5), ftoa(open+0.0200, 5), int(demoLots*10000), ftoa(b.profit(), 2))
-}
-
-func (b *demoBroker) orderJSON() string {
-	open, _, ok := b.entry()
-	if !ok {
-		open = 1.0800
-	}
-	// A working buy-limit a little under the market, with its own SL/TP.
-	price := open - 0.0030
-	return fmt.Sprintf(`{"Order":"100001","ExternalID":"","Symbol":"EURUSD","State":1,"TimeSetup":%d,"Type":2,"PriceOrder":%s,"PriceSL":%s,"PriceTP":%s,"VolumeInitial":10000,"VolumeCurrent":10000,"Comment":"demo","side":0,"TypeTime":2,"TimeExpiration":%d}`,
-		time.Now().Add(-3*time.Hour).Unix(), ftoa(price, 5), ftoa(price-0.0100, 5), ftoa(price+0.0200, 5), time.Now().Add(30*24*time.Hour).Unix())
-}
-
-func (b *demoBroker) accountJSON(login int64, balance float64) string {
-	p := b.profit()
-	return fmt.Sprintf(`{"retcode":"0 Done","answer":{"Login":"%d","Balance":%s,"Equity":%s,"Profit":%s}}`, login, ftoa(balance, 2), ftoa(balance+p, 2), ftoa(p, 2))
-}
-
 func main() {
 	addr := flag.String("addr", ":5199", "listen address")
 	source := flag.String("source", "live", "price source: live (Yahoo Finance, real data) or synthetic")
@@ -197,8 +134,6 @@ func main() {
 	default:
 		log.Fatalf("unknown -source %q (live|synthetic)", *source)
 	}
-	broker := &demoBroker{provider: provider}
-
 	// User management: PostgreSQL when USERS_DSN is set, otherwise in-memory
 	// with the same seed (a laptop without a database still signs in).
 	var users UserStore
@@ -215,6 +150,11 @@ func main() {
 	}
 	adminToken := os.Getenv("ADMIN_TOKEN")
 
+	// The execution engine. BROKER_STATE_FILE keeps positions, orders and
+	// history across restarts; without it the book starts empty each run.
+	broker := newDemoBroker(provider, users, os.Getenv("BROKER_STATE_FILE"))
+	go broker.Run(context.Background())
+
 	mux := http.NewServeMux()
 
 	// ── MT5 auth handshake + ping ────────────────────────────────────────────
@@ -229,33 +169,45 @@ func main() {
 		j(w, `{"retcode":"0 Done"}`)
 	})
 
-	// ── Demo account ─────────────────────────────────────────────────────────
-	const (
-		dealRow = `{"Deal":"900001","Order":"100001","Login":1010,"Symbol":"EURUSD","Action":0,"Entry":0,"Price":1.0800,"Volume":10000,"Time":1751500000,"TimeMsc":1751500000000,"Commission":-3.5,"Storage":0,"Profit":0,"PositionID":"555001"}`
-		placed  = `{"Order":"100002","ExternalID":"","Symbol":"EURUSD","Type":"0","Volume":10000,"PriceOrder":1.0800,"PriceSL":0,"PriceTP":0,"Comment":"demo","ResultRetcode":"10009 Done","ResultPrice":1.0850,"ResultVolume":10000,"TypeTime":0,"TimeExpiration":0}`
-	)
-	mux.HandleFunc("/api/order/get_page", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":[`+broker.orderJSON()+`]}`)
-	})
-	mux.HandleFunc("/api/history/get_page", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":[`+broker.orderJSON()+`]}`)
-	})
-	mux.HandleFunc("/api/order/update", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":`+broker.orderJSON()+`}`)
-	})
-	mux.HandleFunc("/api/position/get", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":`+broker.positionJSON()+`}`)
-	})
-	mux.HandleFunc("/api/position/get_page", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":[`+broker.positionJSON()+`]}`)
-	})
-	mux.HandleFunc("/api/position/update", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":`+broker.positionJSON()+`}`)
-	})
-	loginOf := func(r *http.Request) int64 {
-		v, _ := strconv.ParseInt(r.URL.Query().Get("login"), 10, 64)
+	// ── Demo broker: positions, orders, deals, account ───────────────────────
+	q := func(r *http.Request, name string) string { return r.URL.Query().Get(name) }
+	qi := func(r *http.Request, name string) int64 {
+		v, _ := strconv.ParseInt(q(r, name), 10, 64)
 		return v
 	}
+	qf := func(r *http.Request, name string) float64 {
+		v, _ := strconv.ParseFloat(q(r, name), 64)
+		return v
+	}
+	loginOf := func(r *http.Request) int64 { return qi(r, "login") }
+	readBody := func(w http.ResponseWriter, r *http.Request) []byte {
+		body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
+		return body
+	}
+	mux.HandleFunc("/api/position/get", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.Position(loginOf(r), q(r, "symbol")))
+	})
+	mux.HandleFunc("/api/position/get_page", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.Positions(loginOf(r), int(qi(r, "offset")), int(qi(r, "total"))))
+	})
+	mux.HandleFunc("/api/position/get_total", func(w http.ResponseWriter, r *http.Request) {
+		j(w, fmt.Sprintf(`{"retcode":"0 Done","answer":{"total":%d}}`, broker.PositionCount(loginOf(r))))
+	})
+	mux.HandleFunc("/api/order/get", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.Order(qi(r, "ticket")))
+	})
+	mux.HandleFunc("/api/order/get_page", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.Orders(loginOf(r), int(qi(r, "offset")), int(qi(r, "total"))))
+	})
+	mux.HandleFunc("/api/order/get_total", func(w http.ResponseWriter, r *http.Request) {
+		j(w, fmt.Sprintf(`{"retcode":"0 Done","answer":{"total":%d}}`, broker.OrderCount(loginOf(r))))
+	})
+	mux.HandleFunc("/api/history/get_page", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.History(loginOf(r), qi(r, "from"), qi(r, "to"), int(qi(r, "offset")), int(qi(r, "total"))))
+	})
+	mux.HandleFunc("/api/deal/get_page", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.Deals(loginOf(r), qi(r, "from"), qi(r, "to"), int(qi(r, "offset")), int(qi(r, "total"))))
+	})
 	mux.HandleFunc("/api/user/get", func(w http.ResponseWriter, r *http.Request) {
 		login := loginOf(r)
 		name := "Demo Trader"
@@ -264,24 +216,41 @@ func main() {
 				name = u.Name
 			}
 		}
-		j(w, fmt.Sprintf(`{"retcode":"0 Done","answer":{"ID":"%d","Name":%q}}`, login, name))
+		j(w, broker.User(login, name))
+	})
+	mux.HandleFunc("/api/user/update", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.UpdateUser(readBody(w, r)))
 	})
 	mux.HandleFunc("/api/user/account/get", func(w http.ResponseWriter, r *http.Request) {
-		login := loginOf(r)
-		balance := demoBalance
-		if a, ok := users.AccountByLogin(r.Context(), login); ok {
-			balance = a.Balance
-		}
-		j(w, broker.accountJSON(login, balance))
+		j(w, broker.Account(loginOf(r)))
 	})
-	mux.HandleFunc("/api/deal/get_page", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":[`+dealRow+`]}`)
+	mux.HandleFunc("/api/trade/check_margin", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.CheckMargin(loginOf(r), q(r, "symbol"), int(qi(r, "type")), qi(r, "volume"), qf(r, "price")))
 	})
+	mux.HandleFunc("/api/trade/calc_profit", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.CalcProfit(q(r, "symbol"), int(qi(r, "type")), qi(r, "volume"), qf(r, "price_open"), qf(r, "price_close")))
+	})
+	mux.HandleFunc("/api/trade/balance", func(w http.ResponseWriter, r *http.Request) {
+		j(w, broker.Balance(loginOf(r), qf(r, "balance"), q(r, "comment")))
+	})
+	// The dealer: a request gets an id, and its result is polled by that id —
+	// the two-step MT5 contract the gateway's TradeService implements.
 	mux.HandleFunc("/api/dealer/send_request", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":{"Id":777}}`)
+		id, retcode := broker.Submit(readBody(w, r))
+		if retcode != "" {
+			j(w, fmt.Sprintf(`{"retcode":%q}`, retcode))
+			return
+		}
+		j(w, fmt.Sprintf(`{"retcode":"0 Done","answer":{"Id":%d}}`, id))
 	})
 	mux.HandleFunc("/api/dealer/get_request_result", func(w http.ResponseWriter, r *http.Request) {
-		j(w, `{"retcode":"0 Done","answer":{"777":[{"result":"0"},{"result":"0","answer":`+placed+`}]}}`)
+		id := qi(r, "id")
+		result, ok := broker.Result(id)
+		if !ok {
+			j(w, `{"retcode":"13 Not found","answer":null}`)
+			return
+		}
+		j(w, fmt.Sprintf(`{"retcode":"0 Done","answer":{"%d":[{"result":"0"},{"result":"0","answer":%s}]}}`, id, result))
 	})
 
 	// ── Symbols ──────────────────────────────────────────────────────────────

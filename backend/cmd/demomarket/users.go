@@ -32,6 +32,7 @@ var (
 	errDisabled       = errors.New("account disabled")
 	errEmailTaken     = errors.New("email already registered")
 	errInvalidInput   = errors.New("invalid input")
+	errNotFound       = errors.New("not found")
 )
 
 const (
@@ -74,6 +75,9 @@ type UserStore interface {
 	UserByID(ctx context.Context, id int64) (*User, bool)
 	ListUsers(ctx context.Context) ([]User, error)
 	SetEnabled(ctx context.Context, userID int64, enabled bool) error
+	// SetBalance records the balance the demo broker has settled for a
+	// trading account; the CRM's account list reports it.
+	SetBalance(ctx context.Context, login int64, balance float64) error
 	Name() string
 }
 
@@ -353,6 +357,17 @@ func (s *pgStore) ListUsers(ctx context.Context) ([]User, error) {
 	return out, rows.Err()
 }
 
+func (s *pgStore) SetBalance(ctx context.Context, login int64, balance float64) error {
+	tag, err := s.pool.Exec(ctx, `UPDATE accounts SET balance = $2 WHERE login = $1`, login, balance)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errNotFound
+	}
+	return nil
+}
+
 func (s *pgStore) SetEnabled(ctx context.Context, userID int64, enabled bool) error {
 	tag, err := s.pool.Exec(ctx, `UPDATE users SET enabled = $2 WHERE id = $1`, userID, enabled)
 	if err != nil {
@@ -511,6 +526,18 @@ func (s *memStore) ListUsers(_ context.Context) ([]User, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
+}
+
+func (s *memStore) SetBalance(_ context.Context, login int64, balance float64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.accounts[login]
+	if !ok {
+		return errNotFound
+	}
+	a.Balance = balance
+	s.accounts[login] = a
+	return nil
 }
 
 func (s *memStore) SetEnabled(_ context.Context, userID int64, enabled bool) error {

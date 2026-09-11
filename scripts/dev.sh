@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run the whole platform locally against the in-repo demomarket:
 #
-#   demomarket (real prices + demo broker)   127.0.0.1:5199   (backend/cmd/demomarket)
+#   demomarket (real prices + demo broker)   127.0.0.1:5199   (backend/cmd/demomarket;
+#                                             its book persists in .dev-logs/broker-state.json)
 #   Go gateway       127.0.0.1:5063   (backend/.env.demo)
 #   web terminal     http://localhost:3100  (Vite; proxies /gateway and /crm)
 #
@@ -49,7 +50,7 @@ else
 fi
 
 echo "▸ demomarket  :5199"
-( cd "$ROOT/backend" && USERS_DSN="$USERS_DSN" ADMIN_TOKEN=dev-admin-token exec ./bin/demomarket -addr 127.0.0.1:5199 ) >"$LOGS/demomarket.log" 2>&1 &
+( cd "$ROOT/backend" && USERS_DSN="$USERS_DSN" ADMIN_TOKEN=dev-admin-token BROKER_STATE_FILE="$LOGS/broker-state.json" exec ./bin/demomarket -addr 127.0.0.1:5199 ) >"$LOGS/demomarket.log" 2>&1 &
 PIDS+=($!)
 # The gateway authenticates its MT5 session at startup and only retries on
 # its 20 s ping loop, so the mock must be listening before the gateway starts.

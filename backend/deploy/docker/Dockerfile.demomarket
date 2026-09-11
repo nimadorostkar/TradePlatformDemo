@@ -10,10 +10,14 @@ COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/demomarket ./cmd/demomarket
+# The broker's state directory, owned by the runtime user: a named volume
+# mounted here inherits that ownership, so the state file can be written.
+RUN mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build /out/demomarket /app/demomarket
+COPY --from=build --chown=nonroot:nonroot /out/data /data
 EXPOSE 5199
 USER nonroot:nonroot
 ENTRYPOINT ["/app/demomarket", "-addr", ":5199"]

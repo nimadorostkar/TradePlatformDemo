@@ -50,6 +50,9 @@ type instrument struct {
 	// around it, and this is the demo broker's.
 	SpreadPoints float64
 	Sessions     string // JSON: seven days of MT5 minute-of-day sessions
+	// Contract is the units of the base asset per lot: 100000 for FX, 100 oz
+	// for gold, 1 coin for crypto. Zero means the FX standard lot.
+	Contract float64
 
 	// Synthetic-source parameters.
 	Price float64 // the level the path wanders around
@@ -70,9 +73,9 @@ var instruments = []*instrument{
 	{Symbol: "USDCAD", Description: "US Dollar vs Canadian Dollar", Path: `Forex\Majors\USDCAD`, Base: "USD", Profit: "CAD", Digits: 5, Yahoo: "USDCAD=X", SpreadPoints: 0.00015, Sessions: weekdays, Price: 1.3600, Vol: 0.011, seed: 15},
 	{Symbol: "USDCHF", Description: "US Dollar vs Swiss Franc", Path: `Forex\Majors\USDCHF`, Base: "USD", Profit: "CHF", Digits: 5, Yahoo: "USDCHF=X", SpreadPoints: 0.00015, Sessions: weekdays, Price: 0.8800, Vol: 0.012, seed: 16},
 	{Symbol: "NZDUSD", Description: "New Zealand Dollar vs US Dollar", Path: `Forex\Minors\NZDUSD`, Base: "NZD", Profit: "USD", Digits: 5, Yahoo: "NZDUSD=X", SpreadPoints: 0.00018, Sessions: weekdays, Price: 0.6000, Vol: 0.016, seed: 17},
-	{Symbol: "XAUUSD", Description: "Gold vs US Dollar (COMEX futures, exchange-delayed)", Path: `Metals\Spot\XAUUSD`, Base: "XAU", Profit: "USD", Digits: 2, Yahoo: "GC=F", SpreadPoints: 0.30, Sessions: weekdays, Price: 2400.00, Vol: 0.030, seed: 21},
-	{Symbol: "BTCUSD", Description: "Bitcoin vs US Dollar (Binance BTC/USDT)", Path: `Crypto\Majors\BTCUSD`, Base: "BTC", Profit: "USD", Digits: 2, Yahoo: "BTC-USD", Binance: "BTCUSDT", SpreadPoints: 12.0, Sessions: allWeek, Price: 65000.0, Vol: 0.090, seed: 31},
-	{Symbol: "ETHUSD", Description: "Ethereum vs US Dollar (Binance ETH/USDT)", Path: `Crypto\Majors\ETHUSD`, Base: "ETH", Profit: "USD", Digits: 2, Yahoo: "ETH-USD", Binance: "ETHUSDT", SpreadPoints: 0.80, Sessions: allWeek, Price: 3200.0, Vol: 0.110, seed: 32},
+	{Symbol: "XAUUSD", Description: "Gold vs US Dollar (COMEX futures, exchange-delayed)", Path: `Metals\Spot\XAUUSD`, Base: "XAU", Profit: "USD", Digits: 2, Contract: 100, Yahoo: "GC=F", SpreadPoints: 0.30, Sessions: weekdays, Price: 2400.00, Vol: 0.030, seed: 21},
+	{Symbol: "BTCUSD", Description: "Bitcoin vs US Dollar (Binance BTC/USDT)", Path: `Crypto\Majors\BTCUSD`, Base: "BTC", Profit: "USD", Digits: 2, Contract: 1, Yahoo: "BTC-USD", Binance: "BTCUSDT", SpreadPoints: 12.0, Sessions: allWeek, Price: 65000.0, Vol: 0.090, seed: 31},
+	{Symbol: "ETHUSD", Description: "Ethereum vs US Dollar (Binance ETH/USDT)", Path: `Crypto\Majors\ETHUSD`, Base: "ETH", Profit: "USD", Digits: 2, Contract: 1, Yahoo: "ETH-USD", Binance: "ETHUSDT", SpreadPoints: 0.80, Sessions: allWeek, Price: 3200.0, Vol: 0.110, seed: 32},
 }
 
 var bySymbol = func() map[string]*instrument {
@@ -82,6 +85,14 @@ var bySymbol = func() map[string]*instrument {
 	}
 	return m
 }()
+
+// contract is the units of base asset in one lot.
+func (ins *instrument) contract() float64 {
+	if ins.Contract > 0 {
+		return ins.Contract
+	}
+	return 100000
+}
 
 func (ins *instrument) round(v float64) float64 {
 	p := math.Pow(10, float64(ins.Digits))
