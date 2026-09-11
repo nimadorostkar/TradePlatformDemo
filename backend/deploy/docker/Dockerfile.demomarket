@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
-# The in-repo MT5 Manager API + CRM stand-in (cmd/demomarket), as a container
-# for deployments that have no broker credentials. Same wire contract as the
-# real upstreams; every answer is canned.
+# The in-repo market-data + demo broker service (cmd/demomarket): real prices
+# from Yahoo Finance behind the MT5 Manager API and CRM contracts. Needs
+# outbound HTTPS to query1.finance.yahoo.com; no key, no account.
 
 FROM golang:1.26.6 AS build
 WORKDIR /src

@@ -1,13 +1,15 @@
 # TradePlatformDemo
 
 A full-stack **demo** trading platform in one repository. It never connects to a
-real broker: the gateway's only upstream is a built-in market simulator, and every
-account is demo funds.
+real broker: the gateway's only upstream is the built-in `demomarket` service, which
+serves **real market prices** (live FX and crypto, years of history) from Yahoo
+Finance's public endpoints — no account, no key — in front of a demo account whose
+position and equity follow those prices. Nothing real is ever traded.
 
 | Package                    | What it is                                                                                              | Stack                                 |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | [`frontend/`](frontend/)   | Broker-branded web trading terminal — TradingView is the charting engine, everything around it is ours. | React 19, TypeScript, Vite, Tailwind  |
-| [`backend/`](backend/)     | Trading gateway (REST + `/ws` streaming) in front of `cmd/demomarket`, a simulated market and CRM that speaks the MT5 Manager API contract. | Go, PostgreSQL/TimescaleDB, Redis, NATS |
+| [`backend/`](backend/)     | Trading gateway (REST + `/ws` streaming) in front of `cmd/demomarket`: real market data + a demo broker/CRM, speaking the MT5 Manager API contract. | Go, PostgreSQL/TimescaleDB, Redis, NATS |
 
 Each package has its own README with the full story:
 
@@ -16,7 +18,7 @@ Each package has its own README with the full story:
 
 > **Demo only.** No real broker, CRM, or money is involved anywhere in this
 > repository or its deployment. The code paths are production-shaped (the
-> gateway speaks the MT5 Manager API contract to the simulator), so the usual
+> gateway speaks the MT5 Manager API contract to demomarket), so the usual
 > care still applies: read
 > [`frontend/docs/integration/contract-discrepancies.md`](frontend/docs/integration/contract-discrepancies.md)
 > and [`backend/docs/VOLUME-UNITS.md`](backend/docs/VOLUME-UNITS.md) before touching
@@ -26,14 +28,18 @@ Each package has its own README with the full story:
 
 ```bash
 make setup                        # npm ci + go mod download
-make dev                          # demo market simulator :5199 → gateway :5063 → terminal :3100
+make dev                          # demomarket :5199 → gateway :5063 → terminal :3100
 ```
 
 Open <http://localhost:3100> and sign in with `trader@example.com` /
 `correct-password`. Everything the terminal does — login, account list, quotes,
 chart history, positions, orders, the `/ws` stream — goes through the Go gateway;
-prices come from `backend/cmd/demomarket`, a deterministic market simulator with
-nine instruments (FX majors, gold, bitcoin). Ctrl-C stops all three processes.
+prices come from `backend/cmd/demomarket`, which pulls **real data** for ten
+instruments (seven FX majors, gold futures, BTC, ETH) from Yahoo Finance: live
+ticks every 3 s, true 1-minute candles for the last week, daily candles for years.
+Gold is exchange-delayed (~10 min, and labelled so); FX and crypto are real-time.
+`-source synthetic` runs it offline on a deterministic generator instead.
+Ctrl-C stops all three processes.
 
 How it is wired: the browser talks only to the Vite origin, which proxies
 `/gateway` → gateway and `/crm` → simulator exactly like the deployed edge
@@ -46,7 +52,7 @@ How it is wired: the browser talks only to the Vite origin, which proxies
 .
 ├── frontend/          # web terminal (Vite app; own package.json, tests, deploy/)
 ├── backend/           # Go gateway (own go.mod, Makefile, deploy/, docs/)
-├── scripts/dev.sh     # `make dev`: demo market simulator + gateway + Vite, one Ctrl-C
+├── scripts/dev.sh     # `make dev`: demomarket + gateway + Vite, one Ctrl-C
 ├── deploy/            # docker compose stack + deploy.sh (edge nginx, prebuilt SPA, gateway, mock)
 └── Makefile           # root fan-out: setup / dev / build / test / check
 ```

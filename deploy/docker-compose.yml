@@ -2,8 +2,8 @@
 #
 #   browser ──► edge (nginx) ──► frontend (nginx, prebuilt SPA)
 #                             ├─► gateway  (Go, MT5 Manager API gateway)
-#                             └─► demomarket (simulated market + CRM — this is
-#                                             a demo platform; no broker exists)
+#                             └─► demomarket (real market data via Yahoo Finance
+#                                             + demo broker/CRM; no real broker)
 #
 # Run from this directory on the host: docker compose up -d --build
 # gateway.env is created by deploy.sh (fresh random secrets) — see

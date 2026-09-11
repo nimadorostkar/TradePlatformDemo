@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Run the whole platform locally against the in-repo demo market simulator:
+# Run the whole platform locally against the in-repo demomarket:
 #
-#   demo market simulator   127.0.0.1:5199   (backend/cmd/demomarket)
+#   demomarket (real prices + demo broker)   127.0.0.1:5199   (backend/cmd/demomarket)
 #   Go gateway       127.0.0.1:5063   (backend/.env.demo)
 #   web terminal     http://localhost:3100  (Vite; proxies /gateway and /crm)
 #
@@ -29,7 +29,7 @@ fi
 echo "▸ building gateway + mock"
 ( cd "$ROOT/backend" && go build -o bin/gateway ./cmd/gateway && go build -o bin/demomarket ./cmd/demomarket )
 
-echo "▸ demo market simulator  :5199"
+echo "▸ demomarket  :5199"
 ( cd "$ROOT/backend" && exec ./bin/demomarket -addr 127.0.0.1:5199 ) >"$LOGS/demomarket.log" 2>&1 &
 PIDS+=($!)
 # The gateway authenticates its MT5 session at startup and only retries on
