@@ -150,14 +150,47 @@ type sparkSeries struct {
 }
 
 func (y *yahooProvider) pollSpark() {
-	symbols := make([]string, 0, len(instruments))
+	y.spark(instruments, "15m", "1m")
+
+	// A process started while a market is closed — Friday evening, the
+	// weekend, a holiday — sees an EMPTY 15-minute window for it and would
+	// otherwise carry no price at all until the next session: every quote
+	// blank, every order "10021 No quotes". The last close of the past week
+	// is the right price to show and to fill demo orders at until then.
+	var unpriced []*instrument
+	y.mu.Lock()
 	for _, ins := range instruments {
+		if _, ok := y.ticks[ins.Symbol]; !ok {
+			unpriced = append(unpriced, ins)
+		}
+	}
+	y.mu.Unlock()
+	if len(unpriced) > 0 {
+		y.spark(unpriced, "5d", "15m")
+		y.mu.Lock()
+		for _, ins := range unpriced {
+			if t, ok := y.ticks[ins.Symbol]; ok {
+				log.Printf("yahoo: %s has no price in the last 15 minutes; using the last close %s from %s", ins.Symbol, ftoa(t.Bid, ins.Digits), time.Unix(t.Minute, 0).UTC().Format(time.RFC3339))
+			} else {
+				log.Printf("yahoo: %s has no price in the last 5 days", ins.Symbol)
+			}
+		}
+		y.mu.Unlock()
+	}
+}
+
+// spark refreshes the latest price of the given instruments from the spark
+// endpoint over one range/interval, keeping whatever it already had for an
+// instrument the answer leaves blank.
+func (y *yahooProvider) spark(list []*instrument, rng, interval string) {
+	symbols := make([]string, 0, len(list))
+	for _, ins := range list {
 		symbols = append(symbols, ins.Yahoo)
 	}
 	body, err := y.get("/v8/finance/spark", url.Values{
 		"symbols":  {strings.Join(symbols, ",")},
-		"range":    {"15m"},
-		"interval": {"1m"},
+		"range":    {rng},
+		"interval": {interval},
 	})
 	if err != nil {
 		return
@@ -170,7 +203,7 @@ func (y *yahooProvider) pollSpark() {
 	now := time.Now()
 	y.mu.Lock()
 	defer y.mu.Unlock()
-	for _, ins := range instruments {
+	for _, ins := range list {
 		series, ok := parsed[ins.Yahoo]
 		if !ok {
 			continue
