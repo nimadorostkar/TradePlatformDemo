@@ -17,20 +17,36 @@ Each package has its own README with the full story:
 > and [`backend/docs/VOLUME-UNITS.md`](backend/docs/VOLUME-UNITS.md) before touching
 > order entry on either side.
 
-## Quick start
+## Quick start (full stack, no broker needed)
 
 ```bash
 make setup                        # npm ci + go mod download
-
-# Backend — Go gateway on :5063
-cp backend/.env.example backend/.env   # fill in MT5_* / JWT_SECRET_KEY
-make backend
-
-# Frontend — Vite dev server on :3100
-cp frontend/.env.example frontend/.env # point VITE_GATEWAY_* at the gateway
-cd frontend && npm run tv:sync -- --source=/path/to/licensed/tradingview
-make frontend
+cd frontend && npm run tv:sync -- --source=/path/to/licensed/tradingview && cd ..
+make dev                          # mock MT5/CRM :5199 → gateway :5063 → terminal :3100
 ```
+
+Open <http://localhost:3100> and sign in with `trader@opofinance.com` /
+`correct-password` (the mock CRM's user). Everything the terminal does — login,
+account list, quotes, chart history, positions, orders, the `/ws` stream — goes
+through the real Go gateway; only MetaTrader and the CRM are stand-ins
+(`backend/scripts/mockmt5`). Ctrl-C stops all three processes.
+
+How it is wired: the browser talks only to the Vite origin, which proxies
+`/gateway` → gateway and `/crm` → CRM exactly like the production edge
+(`frontend/deploy/caddy/`). The gateway runs from `backend/.env.mock` — every
+value there is a placeholder; nothing can reach a broker.
+
+### Against a real broker
+
+```bash
+cp backend/.env.example backend/.env       # MT5_* credentials, JWT_SECRET_KEY, CRM_URL,
+                                           # CRM_ACCOUNT_TYPE_SUFFIXES for your account types
+make backend                               # gateway on :5063 (sources nothing — export .env yourself)
+make frontend                              # terminal on :3100, proxying to the gateway
+```
+
+The broker IP-whitelists its Manager API, so real MT5 data only flows from a
+whitelisted host — locally you will see the sign-in screen but no accounts.
 
 The licensed TradingView package is **never committed**; `tv:sync` copies it in
 locally and CI restores it from a private artifact. Without it the chart will not
@@ -46,7 +62,8 @@ load and the build fails on purpose — see
 ├── .github/workflows/
 │   ├── frontend.yml   # typecheck · lint · unit · build · e2e · deploy   (paths: frontend/**)
 │   └── backend.yml    # fmt · vet · race · govulncheck · store · e2e · artifacts (paths: backend/**)
-└── Makefile           # root fan-out: setup / build / test / check
+├── scripts/dev.sh     # `make dev`: mock MT5/CRM + gateway + Vite, one Ctrl-C
+└── Makefile           # root fan-out: setup / dev / build / test / check
 ```
 
 The two workflows are path-filtered, so a change in one package does not run the

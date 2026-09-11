@@ -15,6 +15,7 @@ Thumbs.db
 
 # Logs
 *.log
+.dev-logs/
 
 # Sub-package specifics (node_modules, dist, bin, licensed TradingView assets,
 # Go build outputs, …) are covered by frontend/.gitignore and backend/.gitignore.
