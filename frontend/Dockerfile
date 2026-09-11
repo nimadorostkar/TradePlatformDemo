@@ -34,6 +34,9 @@ COPY --chown=nginx:nginx deploy/entrypoint.sh /docker-entrypoint.d/40-runtime-co
 RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh
 
 COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
+# --chown covers the copied files, not the image's pre-existing html directory;
+# the entrypoint writes runtime-config.js there at start, so nginx must own it.
+RUN chown nginx:nginx /usr/share/nginx/html
 
 EXPOSE 8080
 

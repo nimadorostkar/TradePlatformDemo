@@ -1,0 +1,62 @@
+# Whole platform on one host, one public port (EDGE_PORT, default 8080):
+#
+#   browser ──► edge (nginx) ──► frontend (nginx, prebuilt SPA)
+#                             ├─► gateway  (Go, MT5 Manager API gateway)
+#                             └─► mockmt5  (MT5 + CRM stand-in; replace with
+#                                           real MT5_HOST_URL/CRM_URL in
+#                                           gateway.env to go live)
+#
+# Run from this directory on the host: docker compose up -d --build
+# gateway.env is created by deploy.sh (fresh random secrets) — see
+# gateway.env.example.
+
+name: tradeplatform
+
+services:
+  edge:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${EDGE_PORT:-8080}:80"
+    volumes:
+      - ./edge/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    networks: [platform]
+
+  frontend:
+    build:
+      context: ./frontend-build      # assembled by deploy.sh: dist/ + nginx.conf + entrypoint.sh
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: frontend.env
+    networks: [platform]
+
+  gateway:
+    build:
+      context: ../backend
+      dockerfile: deploy/docker/Dockerfile
+    restart: unless-stopped
+    env_file: gateway.env
+    depends_on:
+      - mockmt5
+    networks: [platform]
+
+  mockmt5:
+    build:
+      context: ../backend
+      dockerfile: deploy/docker/Dockerfile.mockmt5
+    restart: unless-stopped
+    networks: [platform]
+
+networks:
+  platform:
+    driver: bridge
+    ipam:
+      config:
+        # Pinned so gateway.env can trust X-Forwarded-For from `edge` only
+        # (RATE_LIMIT_TRUSTED_PROXIES).
+        - subnet: 172.30.0.0/24

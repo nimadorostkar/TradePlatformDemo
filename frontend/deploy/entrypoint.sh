@@ -80,9 +80,12 @@ sed \
   -e "s|\${CSP_CONNECT_SRC}|${CSP_CONNECT_SRC_ESCAPED}|g" \
   -e "s|\${CSP_FRAME_ANCESTORS}|${CSP_FRAME_ANCESTORS_ESCAPED}|g" \
   "$NGINX_CONF" > "$NGINX_CONF_TMP"
-# The file itself is owned by nginx, but /etc/nginx is intentionally not. A
-# copy can replace the file contents without requiring directory write access.
-cp "$NGINX_CONF_TMP" "$NGINX_CONF"
+# The file itself is owned by nginx, but /etc/nginx is intentionally not.
+# Redirecting into the existing file replaces its contents without directory
+# write access; `cp` cannot be used here — BusyBox ≥ 1.37 unlinks and
+# recreates the destination, which fails with "File exists" in a read-only
+# directory.
+cat "$NGINX_CONF_TMP" > "$NGINX_CONF"
 rm -f "$NGINX_CONF_TMP"
 trap - EXIT HUP INT TERM
 

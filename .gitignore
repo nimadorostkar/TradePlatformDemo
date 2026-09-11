@@ -19,3 +19,8 @@ Thumbs.db
 
 # Sub-package specifics (node_modules, dist, bin, licensed TradingView assets,
 # Go build outputs, …) are covered by frontend/.gitignore and backend/.gitignore.
+
+# deployment artifacts (deploy/deploy.sh)
+deploy/frontend-build/
+deploy/gateway.env
+deploy/frontend.env

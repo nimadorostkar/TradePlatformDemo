@@ -59,11 +59,37 @@ locally. Without it the chart will not load and the build fails on purpose — s
 ├── frontend/          # web terminal (Vite app; own package.json, tests, deploy/)
 ├── backend/           # Go gateway (own go.mod, Makefile, deploy/, docs/)
 ├── scripts/dev.sh     # `make dev`: mock MT5/CRM + gateway + Vite, one Ctrl-C
+├── deploy/            # docker compose stack + deploy.sh (edge nginx, prebuilt SPA, gateway, mock)
 └── Makefile           # root fan-out: setup / dev / build / test / check
 ```
 
 There is no CI/CD in this repository; `make check` is the full verification
 suite and is run locally.
+
+## Deploying to a server
+
+```bash
+deploy/deploy.sh                                   # → http://217.65.145.161:8080 (defaults)
+SSH_HOST=root@1.2.3.4 SSH_KEY=~/.ssh/key EDGE_PORT=8080 deploy/deploy.sh
+```
+
+One Docker Compose project (`deploy/docker-compose.yml`) on a single public port:
+an nginx **edge** serving the SPA at `/` and proxying `/gateway/` (REST + WebSocket)
+and `/crm/` same-origin — the production layout — in front of the **frontend**
+(prebuilt SPA, unprivileged nginx), the Go **gateway** (distroless) and **mockmt5**.
+
+- The terminal is built on the machine running the script, because the licensed
+  TradingView bundle is never in git; only `dist/` is shipped.
+- `gateway.env` is generated on the host on first deploy with fresh random
+  `JWT_SECRET_KEY` / `MANAGER_API_KEY` and never overwritten; nothing secret leaves
+  your machine. To go live, edit `MT5_*` / `CRM_URL` /
+  `CRM_ACCOUNT_TYPE_SUFFIXES` in `/opt/tradeplatform/deploy/gateway.env` and
+  `docker compose up -d`.
+- Served over plain HTTP on an IP: the gateway's session-restore cookies are
+  `Secure`-only, so a page reload asks for sign-in again. Put a domain + TLS in
+  front (`PUBLIC_ORIGIN=https://…` switches the terminal to production mode) and
+  that goes away.
+- Every container restarts with Docker; the stack survives a reboot.
 
 ## Verifying locally
 
