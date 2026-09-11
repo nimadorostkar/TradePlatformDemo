@@ -5,9 +5,7 @@
 #   SSH_HOST=root@1.2.3.4 SSH_KEY=~/.ssh/k PUBLIC_ORIGIN=http://1.2.3.4:8080 deploy/deploy.sh
 #
 # What it does:
-#   1. builds the terminal HERE (the licensed TradingView bundle lives on the
-#      licence holder's machine, never in git) with the public URLs compiled in
-#      as fallbacks;
+#   1. builds the terminal here with the public URLs compiled in as fallbacks;
 #   2. rsyncs deploy/ (+ the built SPA) and backend/ source to REMOTE_DIR;
 #   3. on the host: writes gateway.env once with fresh random secrets, writes
 #      frontend.env, then `docker compose up -d --build`;
@@ -31,10 +29,6 @@ ssh_() { ssh -i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new 
 
 echo "▸ building terminal (${APP_ENV}, ${PUBLIC_ORIGIN}, ${VERSION})"
 ( cd "$ROOT/frontend"
-  if ! npm run tv:check >/dev/null 2>&1; then
-    echo "  ⚠ TradingView Charting Library not installed — the terminal will run without a chart."
-    echo "    Obtain your own licence (tradingview.com/charting-library), then: npm run tv:sync -- --source=<package>"
-  fi
   VITE_APP_ENV="$APP_ENV" \
   VITE_GATEWAY_HTTP_URL="${PUBLIC_ORIGIN}/gateway" \
   VITE_GATEWAY_WS_URL="${PUBLIC_WS_ORIGIN}/gateway" \

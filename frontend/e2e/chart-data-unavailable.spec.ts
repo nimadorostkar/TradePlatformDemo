@@ -1,27 +1,14 @@
-import {
-  CHART_LIBRARY_PRESENT,
-  CHART_LIBRARY_SKIP_REASON,
-  expect,
-  signIn,
-  test,
-} from './fixtures/gateway';
+import { expect, signIn, test } from './fixtures/gateway';
 
 /**
- * The datafeed's safety net, proven end to end (2026-08-24 fix-plan, issue 2
- * acceptance criteria): when every history request stalls, the chart must show
- * a visible "Chart data unavailable — Retry" panel within ~15 s (5 s timeout +
- * one bounded retry + margin) instead of an indefinite blank canvas — and the
- * Retry button must repaint the chart WITHOUT a page reload.
- *
- * Routes registered later take precedence in Playwright, so the stall below
- * overrides the fixture's normal history answers until unrouted.
+ * When history never arrives the pane must SAY so and offer a retry that
+ * repaints in place — never a silent blank canvas, never a page reload.
  */
 
 const STALL_PATTERNS = ['**/api/Tick/getHistoryby1Dresolution**', '**/api/Tick/get?**'];
 
 test.describe('history stall surfaces a recoverable error, never a blank pane', () => {
-  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
-  test('stalled history shows the unavailable panel; Retry repaints in place', async ({
+  test('stalled history shows the error panel; Try again repaints in place', async ({
     page,
     gateway,
   }) => {
@@ -32,19 +19,18 @@ test.describe('history stall surfaces a recoverable error, never a blank pane', 
     const pending: Array<() => void> = [];
     for (const pattern of STALL_PATTERNS) {
       await page.route(pattern, (route) => {
-        // Held forever (until the test unroutes); fulfilling would defeat the
-        // stall, aborting would fail fast instead of hanging.
         pending.push(() => route.abort('timedout').catch(() => {}));
       });
     }
 
     await signIn(page);
 
-    // 5 s timeout + one retry with backoff + rendering margin.
-    await expect(page.getByText(/Chart data unavailable/)).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+    // History timeout + one retry with backoff + rendering margin.
+    await expect(page.getByText('The chart could not be loaded')).toBeVisible({ timeout: 30_000 });
+    const retry = page.getByRole('button', { name: /try again/i });
+    await expect(retry).toBeVisible();
 
-    // The endpoint recovers; the trader clicks Retry — no reload involved.
+    // The endpoint recovers; the trader clicks retry — no reload involved.
     for (const pattern of STALL_PATTERNS) await page.unroute(pattern);
     for (const abort of pending) abort();
     const reloads: string[] = [];
@@ -52,22 +38,11 @@ test.describe('history stall surfaces a recoverable error, never a blank pane', 
       if (frame === page.mainFrame()) reloads.push(frame.url());
     });
 
-    await page.getByRole('button', { name: 'Retry' }).click();
+    await retry.click();
 
-    const chartFrame = page.frameLocator('iframe[title="Financial Chart"]');
-    await expect
-      .poll(
-        async () => {
-          const texts = await chartFrame
-            .locator('[class*=valueValue]')
-            .allInnerTexts()
-            .catch(() => [] as string[]);
-          return texts.some((text) => /\d/.test(text));
-        },
-        { message: 'Retry did not repaint the chart', timeout: 20_000 },
-      )
-      .toBe(true);
-
+    await expect(page.getByTestId('chart-legend').first()).toContainText(/\d+\.\d+/, {
+      timeout: 20_000,
+    });
     expect(reloads, 'Retry must not reload the page').toEqual([]);
   });
 });

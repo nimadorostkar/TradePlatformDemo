@@ -1,8 +1,10 @@
 # TradePlatform
 
-A broker-branded web trading terminal: TradingView is the charting engine, and
-everything around it — docks, widgets, order entry, position management — is
-ours, driven by the Go **LegacyMTSocket** gateway and MetaTrader 5.
+A broker-branded web trading terminal: candles are drawn with the open-source
+[Lightweight Charts](https://github.com/tradingview/lightweight-charts) library
+(Apache-2.0, bundled from npm — no licence, no third-party service), and
+everything — chart data, docks, widgets, order entry, position management — is
+driven by the Go gateway and MetaTrader 5.
 
 > **This is a real-money interface.** Correctness, explicit state, and safe
 > failure come before visual polish. If you are changing anything under
@@ -18,19 +20,15 @@ ours, driven by the Go **LegacyMTSocket** gateway and MetaTrader 5.
 npm install
 cp .env.example .env          # point VITE_GATEWAY_* at your gateway
 
-# Copy the LICENSED TradingView package. It is not in this repository.
-npm run tv:sync -- --source=/path/to/licensed/package
-# (defaults to ../trading-view-integration if that checkout is present)
-
 npm run dev                   # http://localhost:3100
 ```
 
-Without `tv:sync` the terminal still builds and runs, and the chart pane shows a
-"library not installed" panel. There is no fallback to a public TradingView
-widget, because a public widget shows TradingView's own prices rather than the
-broker's MT5 prices, and a chart that disagrees with execution is worse than an
-error. Every deployment brings its own Charting Library licence
-(<https://www.tradingview.com/charting-library/>).
+The chart (`src/features/chart/`) draws only what the gateway serves: history
+from `/api/Tick/get` and `/api/Tick/getHistoryby1Dresolution`, the live bar and
+quote streams from `/ws`, and the account's positions and working orders as
+price lines. There is deliberately no public TradingView widget or any other
+external price source — a chart that disagrees with execution is worse than an
+error.
 
 ### Running against a local gateway
 
@@ -59,8 +57,6 @@ VITE_GATEWAY_WS_URL=ws://localhost:5063
 | `npm run e2e`                     | Playwright; every gateway call intercepted — **cannot trade**       |
 | `npm run test:contract`           | opt-in READ-ONLY checks against a configured non-production gateway |
 | `npm run lint` / `npm run format` | ESLint / Prettier                                                   |
-| `npm run tv:sync`                 | copy the licensed TradingView package                               |
-| `npm run tv:check`                | fail if the licensed assets are missing                             |
 
 **No default command can place a trade.** The E2E suite answers
 `/api/Trade/send_request` from a fixture and asserts the payload; nothing leaves
@@ -172,8 +168,8 @@ The entrypoint injects runtime configuration and builds the CSP `connect-src`
 and `frame-ancestors` from the environment, then **refuses to start** on
 plaintext URLs in production. nginx runs unprivileged on 8080.
 
-Full procedures — including the licensed-asset step CI needs — are in the
-[runbook](docs/operations/runbook.md).
+The repository-level deployment (edge nginx, gateway, this image) lives in
+`../deploy/` and is driven by `deploy/deploy.sh` or the GitHub Actions workflow.
 
 ---
 

@@ -7,13 +7,8 @@ import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    // `public/` holds the synced LICENSED TradingView package — third-party
-    // source we neither own nor modify. `vendor/` holds its type declarations.
     ignores: [
       'dist',
-      'vendor',
-      'public/charting_library',
-      'public/datafeeds',
       'coverage',
       'playwright-report',
       'test-results',

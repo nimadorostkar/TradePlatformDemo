@@ -1,9 +1,8 @@
 # syntax=docker/dockerfile:1
 # Runtime-only image for a PREBUILT terminal.
 #
-# The licensed TradingView bundle is never in git, so the SPA is built on a
-# machine that holds the licence (`deploy/deploy.sh` does this) and only the
-# resulting dist/ is shipped. This image is frontend/Dockerfile's serve stage
+# The SPA is built by `deploy/deploy.sh` (or CI) and only dist/ is shipped, so
+# the host needs no Node toolchain. This image is frontend/Dockerfile's serve stage
 # with the build stage removed; nginx.conf and entrypoint.sh are the same files.
 #
 # Build context: a directory containing dist/, nginx.conf, entrypoint.sh.

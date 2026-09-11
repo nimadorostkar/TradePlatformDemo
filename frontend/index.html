@@ -10,13 +10,6 @@
     <!-- Version the deployment metadata URL so a pre-existing CDN/browser
          cache can never pair a new HTML shell with an old environment. -->
     <script src="/runtime-config.js?v=%VITE_APP_VERSION%"></script>
-    <!-- The chart library is the largest thing the terminal loads and the
-         last thing a trader can wait for. Fetch it from byte zero, in
-         parallel with the app bundle and the session bootstrap — measured
-         cold loads only requested it after 5.9–14.2 s of auth waiting.
-         The path matches the VITE_TRADINGVIEW_LIBRARY_PATH default; a
-         deployment that relocates the library merely wastes this hint. -->
-    <link rel="preload" as="script" href="/charting_library/charting_library.standalone.js" />
   </head>
   <body>
     <div id="root"></div>

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { cn } from '@/components/ui/cn';
 import { useSystemMessages } from '@/stores/system-messages-store';
-import { ChartWorkspace } from '@/integrations/tradingview/TradingChart/ChartWorkspace';
+import { ChartWorkspace } from '@/features/chart/ChartWorkspace';
 import type { WidgetRegistry } from '../registry/types';
 import { Region } from './Region';
 import { useWorkspace } from './workspace-store';

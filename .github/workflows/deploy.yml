@@ -91,25 +91,6 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # Optional. The TradingView Charting Library is licensed to YOU and is
-      # never in git. If the repository secret TRADINGVIEW_PACKAGE_URL points
-      # at a private tarball of your licensed package (containing
-      # charting_library/ and datafeeds/), it is installed into the build;
-      # otherwise the terminal deploys without a chart.
-      - name: Install licensed TradingView package (if configured)
-        working-directory: frontend
-        env:
-          TRADINGVIEW_PACKAGE_URL: ${{ secrets.TRADINGVIEW_PACKAGE_URL }}
-        run: |
-          if [ -z "$TRADINGVIEW_PACKAGE_URL" ]; then
-            echo "TRADINGVIEW_PACKAGE_URL not set — deploying without the chart library."
-            exit 0
-          fi
-          curl -fsSL "$TRADINGVIEW_PACKAGE_URL" -o /tmp/tradingview.tgz
-          mkdir -p /tmp/tradingview && tar -xzf /tmp/tradingview.tgz -C /tmp/tradingview
-          src=$(dirname "$(find /tmp/tradingview -type d -name charting_library | head -1)")
-          npm run tv:sync -- --source="$src"
-
       - name: Configure SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}

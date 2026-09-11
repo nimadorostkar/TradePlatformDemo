@@ -1,13 +1,5 @@
 import type { Page } from '@playwright/test';
-import {
-  CHART_LIBRARY_PRESENT,
-  CHART_LIBRARY_SKIP_REASON,
-  expect,
-  installLiveStreams,
-  signIn,
-  switchAccount,
-  test,
-} from './fixtures/gateway';
+import { expect, installLiveStreams, signIn, switchAccount, test } from './fixtures/gateway';
 
 /** The command palette's search box, disambiguated from the page's selects. */
 function paletteInput(page: Page) {
@@ -75,21 +67,17 @@ test.describe('authentication and shell', () => {
     await expect(banner).not.toContainText('Connected');
   });
 
-  test('renders TradingView without a bootstrap error', async ({ page, gateway }) => {
-    test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
+  test('renders the chart with candles and no page errors', async ({ page, gateway }) => {
     void gateway;
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
     await signIn(page);
 
-    const chartFrame = page.locator('iframe[title="Financial Chart"]');
-    await expect(chartFrame).toBeVisible();
-    await expect(chartFrame).toHaveAttribute('src', /\/charting_library\/sameorigin\.html$/);
-    await expect(page.frameLocator('iframe[title="Financial Chart"]').locator('body')).toHaveClass(
-      /chart-page/,
-    );
-    expect(pageErrors).not.toContainEqual(expect.stringContaining('disabledFeatures'));
+    const pane = page.locator('[data-testid^="chart-pane-"]').first();
+    await expect(pane.locator('canvas').first()).toBeVisible();
+    await expect(page.getByTestId('chart-legend').first()).toContainText(/\d+\.\d+/);
+    expect(pageErrors).toEqual([]);
   });
 });
 
@@ -124,7 +112,6 @@ test.describe('workspace', () => {
   });
 
   test('switches chart layout to two charts', async ({ page }) => {
-    test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
     await page.keyboard.press('ControlOrMeta+k');
     await paletteInput(page).fill('two charts, side by side');
     await paletteOptions(page).first().click();

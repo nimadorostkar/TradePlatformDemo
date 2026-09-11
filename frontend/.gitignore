@@ -10,18 +10,6 @@ test-results
 .DS_Store
 .vite
 
-# Licensed TradingView assets are NEVER committed. They are synced from the
-# local licensed package by `npm run tv:sync`. See
-# docs/architecture/tradingview-asset-strategy.md
-# Contents rather than the directory itself: git cannot re-include a path whose
-# parent directory is excluded, and the hand-written type shim below has to be
-# committed. It contains nothing licensed — it exists so an untrusted pull
-# request can typecheck without fetching the real package. See its header.
-/vendor/tradingview/*
-!/vendor/tradingview/types-shim/
-/public/charting_library/
-/public/datafeeds/
-
 # TypeScript incremental build cache — a local artifact, not source.
 *.tsbuildinfo
 release.zip

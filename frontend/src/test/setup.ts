@@ -15,7 +15,6 @@ export const TEST_ENV: AppEnv = {
   gatewayHttpUrl: 'http://gateway.test',
   gatewayWsUrl: 'ws://gateway.test',
   crmHttpUrl: 'https://crm.test',
-  tradingViewLibraryPath: '/charting_library/',
   brandConfigUrl: undefined,
   defaultTimezone: 'Etc/UTC',
   confirmTrades: true,

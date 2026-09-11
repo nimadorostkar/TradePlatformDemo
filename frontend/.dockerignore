@@ -6,6 +6,3 @@ test-results
 .git
 .env
 .env.local
-vendor
-public/charting_library
-public/datafeeds

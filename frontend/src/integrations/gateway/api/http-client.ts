@@ -128,6 +128,14 @@ export class GatewayHttpClient {
 
     const key = `${options.endpoint} ${this.buildUrl(options.path, options.query)}`;
     let entry = this.inflight.get(key);
+    // An entry whose last waiter has already aborted is doomed but still
+    // listed until its `finally` runs a microtask later. A caller arriving in
+    // that gap — React StrictMode's synchronous unmount/remount is exactly
+    // this — must not join it, or it inherits a rejection it never caused.
+    if (entry?.abortAll.signal.aborted) {
+      this.inflight.delete(key);
+      entry = undefined;
+    }
     if (!entry) {
       // The shared request runs on its OWN signal. It is aborted only when
       // every subscriber has aborted; a caller that never provided a signal

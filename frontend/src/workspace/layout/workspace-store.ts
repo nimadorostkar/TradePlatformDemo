@@ -92,6 +92,7 @@ interface WorkspaceState {
   setActiveInterval: (interval: string) => void;
   setChartLayout: (layout: ChartLayout) => void;
   setPaneSymbol: (paneId: string, symbol: string) => void;
+  setPaneInterval: (paneId: string, interval: string) => void;
   setPaneChartState: (paneId: string, state: unknown) => void;
 
   // tables
@@ -500,6 +501,12 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
     update(set, (workspace) => ({
       ...workspace,
       chartPanes: workspace.chartPanes.map((p) => (p.id === paneId ? { ...p, symbol } : p)),
+    })),
+
+  setPaneInterval: (paneId, interval) =>
+    update(set, (workspace) => ({
+      ...workspace,
+      chartPanes: workspace.chartPanes.map((p) => (p.id === paneId ? { ...p, interval } : p)),
     })),
 
   setPaneChartState: (paneId, state) =>

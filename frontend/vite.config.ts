@@ -3,9 +3,6 @@ import type { ProxyOptions } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
-// The licensed TradingView package is copied into vendor/tradingview by
-// `npm run tv:sync` and served from /charting_library at runtime. It is never
-// bundled: the library loads its own chunks relative to `library_path`.
 export default defineConfig(({ mode }) => {
   const config = loadEnv(mode, process.cwd(), '');
   const gatewayProxyTarget = config.DEV_GATEWAY_PROXY_TARGET;
@@ -41,17 +38,12 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        '@tv': path.resolve(__dirname, './vendor/tradingview'),
       },
     },
     server: {
       port: 3100,
       strictPort: true,
       proxy: Object.keys(proxy).length > 0 ? proxy : undefined,
-      fs: {
-        // Allow serving the vendored TradingView assets during development.
-        allow: [path.resolve(__dirname)],
-      },
     },
     // Bind explicitly so Playwright's 127.0.0.1 health poll succeeds; the
     // default `localhost` can resolve to ::1 only.

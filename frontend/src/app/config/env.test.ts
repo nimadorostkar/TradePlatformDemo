@@ -75,7 +75,6 @@ describe('production hardening', () => {
 describe('defaults', () => {
   it('applies safe defaults for optional settings', () => {
     const env = parseEnv(PRODUCTION);
-    expect(env.tradingViewLibraryPath).toBe('/charting_library/');
     expect(env.enableOneClickTrading).toBe(false);
     expect(env.enableLegacyAuthStorage).toBe(false);
     // Four times the gateway's ~3s push cadence.

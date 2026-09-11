@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@/app/App';
 import { env, EnvValidationError } from '@/app/config/env';
-import { loadTradingView } from '@/integrations/tradingview/types';
 import '@/styles/global.css';
 
 /**
@@ -28,14 +27,6 @@ function bootstrap(): void {
     container.appendChild(pre);
     return;
   }
-
-  // Start executing the chart library NOW, while the session bootstrap runs.
-  // The preload hint in index.html fetches the bytes; this parses them and
-  // resolves the module-level singleton that ChartWorkspace later awaits, so
-  // by the time the terminal mounts the library is simply already there.
-  // Fire-and-forget: a failure here surfaces exactly as before, when the
-  // chart itself awaits the same promise and shows its error state.
-  void loadTradingView(env().tradingViewLibraryPath).catch(() => {});
 
   createRoot(container).render(
     <StrictMode>

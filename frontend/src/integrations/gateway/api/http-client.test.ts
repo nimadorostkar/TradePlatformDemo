@@ -207,6 +207,47 @@ describe('in-flight GET dedupe', () => {
     expect(seen[0]?.aborted).toBe(true);
   });
 
+  it('does not join a request whose last caller aborted a moment ago', async () => {
+    // React StrictMode unmounts and remounts an effect synchronously: the
+    // first mount's abort and the second mount's identical GET land in the
+    // same tick, before the doomed entry's `finally` has evicted it.
+    let calls = 0;
+    const fetchImpl = vi.fn(
+      async (_url: unknown, init?: RequestInit) =>
+        new Promise<Response>((resolve, reject) => {
+          calls += 1;
+          const mine = calls;
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+          if (mine === 2) {
+            resolve(
+              new Response(JSON.stringify({ data: 'second', success: true }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+              }),
+            );
+          }
+        }),
+    ) as unknown as typeof fetch;
+    const http = client({ fetchImpl });
+    const opts = {
+      endpoint: 'symbols-by-mask',
+      path: '/api/Symbol/getsymbolsbymask',
+      schema: ok,
+      retries: 0,
+    };
+
+    const first = new AbortController();
+    const doomed = http.request({ ...opts, signal: first.signal });
+    first.abort();
+    const second = http.request({ ...opts, signal: new AbortController().signal });
+
+    await expect(doomed).rejects.toMatchObject({ kind: 'canceled' });
+    await expect(second).resolves.toMatchObject({ data: 'second' });
+    expect(calls).toBe(2);
+  });
+
   it('never deduplicates a mutation', async () => {
     const fetchImpl = respond(200);
     const http = client({ fetchImpl });

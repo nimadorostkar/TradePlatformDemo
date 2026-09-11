@@ -27,7 +27,6 @@ APP_VERSION="${APP_VERSION:-0.0.0}"
 # Optional overrides. An unset value is emitted as an empty string, which the
 # client treats as "not configured" and resolves from its build-time default —
 # so leaving these alone is always safe.
-TRADINGVIEW_LIBRARY_PATH="${TRADINGVIEW_LIBRARY_PATH:-}"
 DEFAULT_TIMEZONE="${DEFAULT_TIMEZONE:-}"
 QUOTE_STALE_AFTER_MS="${QUOTE_STALE_AFTER_MS:-}"
 CONFIRM_TRADES="${CONFIRM_TRADES:-}"
@@ -103,7 +102,7 @@ json_escape() {
 }
 
 RUNTIME_JSON=$(cat <<JSON
-{"VITE_APP_ENV":"$(json_escape "$APP_ENV")","VITE_GATEWAY_HTTP_URL":"$(json_escape "$GATEWAY_HTTP_URL")","VITE_GATEWAY_WS_URL":"$(json_escape "$GATEWAY_WS_URL")","VITE_CRM_HTTP_URL":"$(json_escape "$CRM_HTTP_URL")","VITE_BRAND_CONFIG_URL":"$(json_escape "$BRAND_CONFIG_URL")","VITE_APP_VERSION":"$(json_escape "$APP_VERSION")","VITE_ALLOWED_HOST_ORIGINS":"$(json_escape "${ALLOWED_HOST_ORIGINS:-}")","VITE_TRADINGVIEW_LIBRARY_PATH":"$(json_escape "$TRADINGVIEW_LIBRARY_PATH")","VITE_DEFAULT_TIMEZONE":"$(json_escape "$DEFAULT_TIMEZONE")","VITE_QUOTE_STALE_AFTER_MS":"$(json_escape "$QUOTE_STALE_AFTER_MS")","VITE_CONFIRM_TRADES":"$(json_escape "$CONFIRM_TRADES")","VITE_ENABLE_ONE_CLICK_TRADING":"$(json_escape "$ENABLE_ONE_CLICK_TRADING")","VITE_ENABLE_LEGACY_AUTH_STORAGE":"$(json_escape "$ENABLE_LEGACY_AUTH_STORAGE")"}
+{"VITE_APP_ENV":"$(json_escape "$APP_ENV")","VITE_GATEWAY_HTTP_URL":"$(json_escape "$GATEWAY_HTTP_URL")","VITE_GATEWAY_WS_URL":"$(json_escape "$GATEWAY_WS_URL")","VITE_CRM_HTTP_URL":"$(json_escape "$CRM_HTTP_URL")","VITE_BRAND_CONFIG_URL":"$(json_escape "$BRAND_CONFIG_URL")","VITE_APP_VERSION":"$(json_escape "$APP_VERSION")","VITE_ALLOWED_HOST_ORIGINS":"$(json_escape "${ALLOWED_HOST_ORIGINS:-}")","VITE_DEFAULT_TIMEZONE":"$(json_escape "$DEFAULT_TIMEZONE")","VITE_QUOTE_STALE_AFTER_MS":"$(json_escape "$QUOTE_STALE_AFTER_MS")","VITE_CONFIRM_TRADES":"$(json_escape "$CONFIRM_TRADES")","VITE_ENABLE_ONE_CLICK_TRADING":"$(json_escape "$ENABLE_ONE_CLICK_TRADING")","VITE_ENABLE_LEGACY_AUTH_STORAGE":"$(json_escape "$ENABLE_LEGACY_AUTH_STORAGE")"}
 JSON
 )
 

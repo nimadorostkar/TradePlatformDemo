@@ -33,7 +33,6 @@ const envSchema = z.object({
   VITE_GATEWAY_HTTP_URL: httpUrl,
   VITE_GATEWAY_WS_URL: wsUrl,
   VITE_CRM_HTTP_URL: httpUrl,
-  VITE_TRADINGVIEW_LIBRARY_PATH: z.string().default('/charting_library/'),
   VITE_BRAND_CONFIG_URL: z.string().optional(),
   VITE_DEFAULT_TIMEZONE: z.string().default('Etc/UTC'),
   // Omission must be distinguishable from an explicit false: in production,
@@ -51,7 +50,6 @@ export type AppEnv = {
   gatewayHttpUrl: string;
   gatewayWsUrl: string;
   crmHttpUrl: string;
-  tradingViewLibraryPath: string;
   brandConfigUrl: string | undefined;
   defaultTimezone: string;
   confirmTrades: boolean;
@@ -112,7 +110,6 @@ export function parseEnv(raw: Record<string, unknown>): AppEnv {
     gatewayHttpUrl: v.VITE_GATEWAY_HTTP_URL,
     gatewayWsUrl: v.VITE_GATEWAY_WS_URL,
     crmHttpUrl: v.VITE_CRM_HTTP_URL,
-    tradingViewLibraryPath: v.VITE_TRADINGVIEW_LIBRARY_PATH,
     brandConfigUrl: v.VITE_BRAND_CONFIG_URL || undefined,
     defaultTimezone: v.VITE_DEFAULT_TIMEZONE,
     confirmTrades:

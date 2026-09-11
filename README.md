@@ -9,7 +9,7 @@ A full-stack trading platform in one repository:
 
 Each package has its own README with the full story:
 
-- [`frontend/README.md`](frontend/README.md) — terminal architecture, commands, the licensed TradingView asset policy
+- [`frontend/README.md`](frontend/README.md) — terminal architecture, commands, chart data flow
 - [`backend/README.md`](backend/README.md) — gateway design, endpoint parity, deployment
 
 > **This is a real-money system.** Read
@@ -21,7 +21,6 @@ Each package has its own README with the full story:
 
 ```bash
 make setup                        # npm ci + go mod download
-cd frontend && npm run tv:sync -- --source=/path/to/charting_library && cd ..   # optional, see below
 make dev                          # mock MT5/CRM :5199 → gateway :5063 → terminal :3100
 ```
 
@@ -48,14 +47,10 @@ make frontend                              # terminal on :3100, proxying to the 
 The broker IP-whitelists its Manager API, so real MT5 data only flows from a
 whitelisted host — locally you will see the sign-in screen but no accounts.
 
-**Chart library — bring your own licence.** The terminal is built on TradingView's
-*Charting Library*, which is licensed per company and is **never in this repository**.
-Apply for your own (free) licence at <https://www.tradingview.com/charting-library/>,
-then `cd frontend && npm run tv:sync -- --source=/path/to/charting_library` and
-redeploy. Until then everything runs — sign-in, quotes, positions, orders — and the
-chart pane shows a "library not installed" panel; there is deliberately no fallback
-to a public TradingView widget (its prices would not be the broker's). Details:
-[`frontend/docs/architecture/tradingview-asset-strategy.md`](frontend/docs/architecture/tradingview-asset-strategy.md).
+**Chart.** Candles are drawn with the open-source
+[Lightweight Charts](https://github.com/tradingview/lightweight-charts) library
+(Apache-2.0, an ordinary npm dependency). No licence, no external service, no
+third-party prices: every bar comes from the gateway (`frontend/src/features/chart/`).
 
 ## Layout
 
@@ -83,8 +78,8 @@ an nginx **edge** serving the SPA at `/` and proxying `/gateway/` (REST + WebSoc
 and `/crm/` same-origin — the production layout — in front of the **frontend**
 (prebuilt SPA, unprivileged nginx), the Go **gateway** (distroless) and **mockmt5**.
 
-- The terminal is built on the machine running the script, because the licensed
-  TradingView bundle is never in git; only `dist/` is shipped.
+- The terminal is built on the machine running the script; only `dist/` is
+  shipped, so the host needs no Node toolchain.
 - `gateway.env` is generated on the host on first deploy with fresh random
   `JWT_SECRET_KEY` / `MANAGER_API_KEY` and never overwritten; nothing secret leaves
   your machine. To go live, edit `MT5_*` / `CRM_URL` /
@@ -120,9 +115,7 @@ gh variable set PUBLIC_ORIGIN    --body 'http://<server ip>:8080'
 rm /tmp/ci_deploy_key /tmp/ci_deploy_key.pub      # the private key now lives only in GitHub
 ```
 
-Optional: `gh secret set TRADINGVIEW_PACKAGE_URL --body '<private tarball URL>'`
-installs your licensed Charting Library into the build; without it the terminal
-deploys without a chart. The deploy job fails with an explicit message until the
+The deploy job fails with an explicit message until the
 secrets above exist — it never deploys half-configured.
 
 ## Verifying locally

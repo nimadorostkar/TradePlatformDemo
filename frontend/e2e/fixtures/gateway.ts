@@ -1,18 +1,4 @@
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { test as base, type Page, type Route } from '@playwright/test';
-
-/**
- * Whether the licensed TradingView Charting Library is installed
- * (`npm run tv:sync`). It is never in git — every deployment brings its own
- * licence — so specs that drive the chart itself skip, with this reason,
- * when it is absent. Everything that does not need the chart still runs.
- */
-export const CHART_LIBRARY_PRESENT = existsSync(
-  path.resolve(import.meta.dirname, '../../public/charting_library/charting_library.standalone.js'),
-);
-export const CHART_LIBRARY_SKIP_REASON =
-  'requires the TradingView Charting Library — bring your own licence, then `npm run tv:sync`';
 
 /**
  * Gateway interceptor.
@@ -533,7 +519,7 @@ function bars(base: number) {
  * Opt-in LIVE stream mock for specs that exercise chart trading.
  *
  * The default fixture closes every WebSocket, which is the right posture for
- * the resilience specs — but TradingView only enables chart/DOM trading while
+ * the resilience specs — and the terminal only enables trading while
  * the broker reports Connected, and the broker's connection state mirrors the
  * account/positions/orders streams. Registering this AFTER the fixture's
  * routes (Playwright gives the most recent registration precedence) replaces

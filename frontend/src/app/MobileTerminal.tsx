@@ -3,7 +3,7 @@ import { BarChart3, CandlestickChart, Layers, ListOrdered, Wallet } from 'lucide
 import { cn } from '@/components/ui/cn';
 import type { MobileTab as Tab } from '@/app/url-state';
 import { LoadingState } from '@/components/ui/primitives';
-import { ChartWorkspace } from '@/integrations/tradingview/TradingChart/ChartWorkspace';
+import { ChartWorkspace } from '@/features/chart/ChartWorkspace';
 
 /**
  * Mobile terminal.
@@ -39,7 +39,7 @@ export function MobileTerminal({ tab, onTabChange: setTab }: MobileTerminalProps
       <div className="min-h-0 flex-1">
         <Suspense fallback={<LoadingState />}>
           {/* The chart stays MOUNTED across tab changes — remounting it would
-              reload the TradingView iframe every time the user checks a price. */}
+              refetch the chart's history every time the user checks a price. */}
           <div className={cn('h-full', tab === 'chart' ? 'block' : 'hidden')}>
             <ChartWorkspace />
           </div>

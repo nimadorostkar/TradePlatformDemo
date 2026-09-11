@@ -11,18 +11,6 @@ RUN npm ci
 
 COPY . .
 
-# The LICENSED TradingView Charting Library is never committed to this repo:
-# every deployment brings its own licence. When the package is absent the
-# build still succeeds and the terminal shows a "chart library not installed"
-# panel in place of the chart — it never falls back to a public widget.
-ARG TRADINGVIEW_SOURCE_DIR=/tradingview
-RUN --mount=type=bind,source=.,target=/src,rw \
-    if [ -d "$TRADINGVIEW_SOURCE_DIR/charting_library" ]; then \
-      node scripts/sync-tradingview-assets.mjs --source="$TRADINGVIEW_SOURCE_DIR"; \
-    fi; \
-    node scripts/sync-tradingview-assets.mjs --check \
-      || echo "WARNING: TradingView Charting Library not installed; building without a chart."
-
 RUN npm run build
 
 # ── Stage 2: serve ───────────────────────────────────────────────────────────

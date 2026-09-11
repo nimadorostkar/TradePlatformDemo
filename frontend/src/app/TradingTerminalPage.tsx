@@ -33,8 +33,8 @@ export function TradingTerminalPage() {
   // shared by pasting the address bar (HGH-03).
   useUrlStateSync(isMobile ? mobileTab : null, setMobileTab);
 
-  // Theme is applied to the document root so the token layer and the
-  // TradingView iframe stay in step.
+  // Theme is applied to the document root so the token layer and the chart
+  // palette stay in step.
   useEffect(() => {
     const resolved =
       theme === 'system'
