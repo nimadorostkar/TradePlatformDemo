@@ -38,6 +38,12 @@ test.describe('no tradable account', () => {
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByRole('button', { name: 'Create Account' })).toBeVisible();
 
+    // The broker portal is a placeholder host here; answer it locally so the
+    // new tab settles on the URL the button opened instead of a DNS error.
+    await context.route(`${CREATE_ACCOUNT_URL}**`, (route) =>
+      route.fulfill({ status: 200, contentType: 'text/html', body: '<title>broker</title>' }),
+    );
+
     const opened = context.waitForEvent('page');
     await page.getByRole('button', { name: 'Create Account' }).click();
     const tab = await opened;

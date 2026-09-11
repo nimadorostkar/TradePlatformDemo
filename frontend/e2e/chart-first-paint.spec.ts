@@ -1,4 +1,10 @@
-import { expect, signIn, test } from './fixtures/gateway';
+import {
+  CHART_LIBRARY_PRESENT,
+  CHART_LIBRARY_SKIP_REASON,
+  expect,
+  signIn,
+  test,
+} from './fixtures/gateway';
 
 /**
  * Regression: the chart must paint candles on EVERY load, not most of them.
@@ -21,6 +27,7 @@ const RELOAD_ITERATIONS = 8;
 const LEGEND_DEADLINE_MS = 10_000;
 
 test.describe('chart first paint is deterministic', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test('paints candles within 10s on every one of 8 consecutive loads', async ({
     page,
     gateway,

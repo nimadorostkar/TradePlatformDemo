@@ -1,5 +1,12 @@
 import type { Frame, FrameLocator, Page } from '@playwright/test';
-import { expect, installLiveStreams, signIn, test } from './fixtures/gateway';
+import {
+  CHART_LIBRARY_PRESENT,
+  CHART_LIBRARY_SKIP_REASON,
+  expect,
+  installLiveStreams,
+  signIn,
+  test,
+} from './fixtures/gateway';
 
 /**
  * The two verifications production QA could not perform without an open
@@ -27,6 +34,7 @@ function chartFrameHandle(page: Page): Frame {
 }
 
 test.describe('bracket lifecycle on the chart', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test.skip(({ isMobile }) => Boolean(isMobile), 'desktop chart trading only');
 
   // PARKED: the library did not render position/bracket LINES in this
@@ -112,6 +120,7 @@ test.describe('bracket lifecycle on the chart', () => {
 });
 
 test.describe('range buttons under slow history', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test.skip(({ isMobile }) => Boolean(isMobile), 'desktop only');
 
   /**

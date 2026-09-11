@@ -28,7 +28,9 @@ test.describe('chart save button', () => {
         count += await frame
           .evaluate(() => {
             let n = 0;
-            for (const el of document.querySelectorAll<HTMLElement>('[class^="saveString-"], [class*=" saveString-"]')) {
+            for (const el of document.querySelectorAll<HTMLElement>(
+              '[class^="saveString-"], [class*=" saveString-"]',
+            )) {
               const r = el.getBoundingClientRect();
               if (r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none') n++;
             }

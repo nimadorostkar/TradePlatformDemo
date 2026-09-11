@@ -1,4 +1,18 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { test as base, type Page, type Route } from '@playwright/test';
+
+/**
+ * Whether the licensed TradingView Charting Library is installed
+ * (`npm run tv:sync`). It is never in git — every deployment brings its own
+ * licence — so specs that drive the chart itself skip, with this reason,
+ * when it is absent. Everything that does not need the chart still runs.
+ */
+export const CHART_LIBRARY_PRESENT = existsSync(
+  path.resolve(import.meta.dirname, '../../public/charting_library/charting_library.standalone.js'),
+);
+export const CHART_LIBRARY_SKIP_REASON =
+  'requires the TradingView Charting Library — bring your own licence, then `npm run tv:sync`';
 
 /**
  * Gateway interceptor.
@@ -627,7 +641,10 @@ export async function switchAccount(page: Page, login: string): Promise<void> {
   await page.getByLabel('Select trading account').click();
   const search = page.getByLabel('Search accounts');
   await search.fill(login);
-  await page.getByRole('option', { name: new RegExp(login) }).first().click();
+  await page
+    .getByRole('option', { name: new RegExp(login) })
+    .first()
+    .click();
   await expect(page.getByLabel('Select trading account')).toContainText(login, {
     timeout: 30_000,
   });

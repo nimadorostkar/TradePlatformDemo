@@ -1,5 +1,13 @@
 import type { FrameLocator, Page } from '@playwright/test';
-import { expect, installLiveStreams, signIn, switchAccount, test } from './fixtures/gateway';
+import {
+  CHART_LIBRARY_PRESENT,
+  CHART_LIBRARY_SKIP_REASON,
+  expect,
+  installLiveStreams,
+  signIn,
+  switchAccount,
+  test,
+} from './fixtures/gateway';
 
 /**
  * TradingView chart trading: context-menu orders, instant placement, and the
@@ -88,6 +96,7 @@ function parseActionLabel(label: string): { price: number; kind: 'limit' | 'stop
 }
 
 test.describe('chart context-menu trading', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test.skip(({ isMobile }) => Boolean(isMobile), 'desktop chart trading only');
 
   test('instant OFF: chart Buy opens the Order Ticket and nothing is sent before confirmation', async ({
@@ -160,6 +169,7 @@ test.describe('chart context-menu trading', () => {
 });
 
 test.describe('boot with the trading panel restored', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test.skip(({ isMobile }) => Boolean(isMobile), 'desktop chart trading only');
 
   test('the chart still becomes ready and renders series data', async ({ page, gateway }) => {
@@ -191,6 +201,7 @@ test.describe('boot with the trading panel restored', () => {
 });
 
 test.describe('chart context-menu activation', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test.skip(({ isMobile }) => Boolean(isMobile), 'desktop chart trading only');
 
   /**
@@ -223,6 +234,7 @@ test.describe('chart context-menu activation', () => {
 });
 
 test.describe('chart trading after an account switch', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test.skip(({ isMobile }) => Boolean(isMobile), 'desktop chart trading only');
 
   /**
@@ -304,6 +316,7 @@ test.describe('chart trading after an account switch', () => {
 });
 
 test.describe('TradingView DOM trading', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test.skip(({ isMobile }) => Boolean(isMobile), 'desktop chart trading only');
 
   /** Opens the app with the DOM panel visible and instant placement ON. */

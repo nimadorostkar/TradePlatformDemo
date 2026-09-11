@@ -1,5 +1,13 @@
 import type { Page } from '@playwright/test';
-import { expect, signIn, switchAccount, test } from './fixtures/gateway';
+import {
+  CHART_LIBRARY_PRESENT,
+  CHART_LIBRARY_SKIP_REASON,
+  expect,
+  installLiveStreams,
+  signIn,
+  switchAccount,
+  test,
+} from './fixtures/gateway';
 
 /** The command palette's search box, disambiguated from the page's selects. */
 function paletteInput(page: Page) {
@@ -68,6 +76,7 @@ test.describe('authentication and shell', () => {
   });
 
   test('renders TradingView without a bootstrap error', async ({ page, gateway }) => {
+    test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
     void gateway;
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
@@ -115,6 +124,7 @@ test.describe('workspace', () => {
   });
 
   test('switches chart layout to two charts', async ({ page }) => {
+    test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
     await page.keyboard.press('ControlOrMeta+k');
     await paletteInput(page).fill('two charts, side by side');
     await paletteOptions(page).first().click();
@@ -134,8 +144,8 @@ test.describe('workspace', () => {
       .poll(() =>
         page.evaluate(
           () =>
-            JSON.parse(localStorage.getItem('tradeplatform.workspace.v3.default') ?? '{}').density ??
-            null,
+            JSON.parse(localStorage.getItem('tradeplatform.workspace.v3.default') ?? '{}')
+              .density ?? null,
         ),
       )
       .toBe('compact');
@@ -173,6 +183,10 @@ test.describe('market data and trading', () => {
 
   test.beforeEach(async ({ page, gateway }) => {
     void gateway;
+    // Quotes reach the order ticket over the gateway's /ws stream — the same
+    // path production uses — so these specs do not depend on the (licensed,
+    // optional) chart library being present.
+    await installLiveStreams(page);
     await signIn(page);
   });
 
@@ -348,6 +362,7 @@ test.describe('capability-gated panels', () => {
 
   test.beforeEach(async ({ page, gateway }) => {
     void gateway;
+    await installLiveStreams(page);
     await signIn(page);
   });
 
@@ -407,6 +422,7 @@ test.describe('accessibility', () => {
 
   test('the confirmation dialog traps focus and starts on Cancel', async ({ page, gateway }) => {
     void gateway;
+    await installLiveStreams(page);
     await signIn(page);
     await page.getByRole('tab', { name: 'Order', exact: true }).click();
     await page.getByRole('button', { name: /buy/i }).click();

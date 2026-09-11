@@ -1,4 +1,10 @@
-import { expect, signIn, test } from './fixtures/gateway';
+import {
+  CHART_LIBRARY_PRESENT,
+  CHART_LIBRARY_SKIP_REASON,
+  expect,
+  signIn,
+  test,
+} from './fixtures/gateway';
 
 /**
  * The datafeed's safety net, proven end to end (2026-08-24 fix-plan, issue 2
@@ -14,6 +20,7 @@ import { expect, signIn, test } from './fixtures/gateway';
 const STALL_PATTERNS = ['**/api/Tick/getHistoryby1Dresolution**', '**/api/Tick/get?**'];
 
 test.describe('history stall surfaces a recoverable error, never a blank pane', () => {
+  test.skip(!CHART_LIBRARY_PRESENT, CHART_LIBRARY_SKIP_REASON);
   test('stalled history shows the unavailable panel; Retry repaints in place', async ({
     page,
     gateway,
