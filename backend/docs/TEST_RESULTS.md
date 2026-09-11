@@ -46,7 +46,7 @@ All 10 test packages PASS under the race detector.
 
 ## Smoke test (`scripts/smoke_test.sh`)
 
-Run against a local instance backed by a mock MT5 server:
+Run against a local instance backed by a demo market server:
 
 ```
 == 1. Liveness /healthz ==               PASS: /healthz

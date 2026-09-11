@@ -48,7 +48,7 @@ fallback — and derives the verdict by AUTHORITY, not by shape:
 | 4     | `status`                            | derived, and wrong — see below                 |
 
 Two corrections behind that ordering, both verified by running the shipped
-gateway against `scripts/mockmt5`:
+gateway against `cmd/demomarket`:
 
 1. **MT5 retcodes carry text.** The wire value is `"10009 Done"`, never
    `"10009"`. Matching the raw string against `MT5_SUCCESS_RETCODES` recognised

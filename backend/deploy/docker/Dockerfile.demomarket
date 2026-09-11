@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# The in-repo MT5 Manager API + CRM stand-in (scripts/mockmt5), as a container
+# The in-repo MT5 Manager API + CRM stand-in (cmd/demomarket), as a container
 # for deployments that have no broker credentials. Same wire contract as the
 # real upstreams; every answer is canned.
 
@@ -8,11 +8,11 @@ WORKDIR /src
 COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/mockmt5 ./scripts/mockmt5
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/demomarket ./cmd/demomarket
 
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
-COPY --from=build /out/mockmt5 /app/mockmt5
+COPY --from=build /out/demomarket /app/demomarket
 EXPOSE 5199
 USER nonroot:nonroot
-ENTRYPOINT ["/app/mockmt5", "-addr", ":5199"]
+ENTRYPOINT ["/app/demomarket", "-addr", ":5199"]

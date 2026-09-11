@@ -15,7 +15,7 @@ setup: ## Install frontend deps and download Go modules
 	cd backend && go mod download
 
 .PHONY: dev
-dev: ## Run the full stack locally against the mock MT5/CRM (terminal on :3100)
+dev: ## Run the full stack locally against the demo market simulator (terminal on :3100)
 	./scripts/dev.sh
 
 .PHONY: backend

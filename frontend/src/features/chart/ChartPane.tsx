@@ -165,9 +165,16 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
     candlesRef.current = candles;
     volumeRef.current = volume;
 
-    const onCrosshair = (param: { seriesData: Map<unknown, unknown>; time?: unknown }) => {
+    const onCrosshair = (param: {
+      point?: unknown;
+      seriesData: Map<unknown, unknown>;
+      time?: unknown;
+    }) => {
+      // `point` is set only while a pointer is over the chart. The library can
+      // report a crosshair (e.g. after a layout pass) with no pointer at all;
+      // without this guard the legend froze on that phantom bar.
       const data = param.seriesData.get(candles) as Partial<Bar> | undefined;
-      if (!data || typeof data.open !== 'number') {
+      if (!param.point || !data || typeof data.open !== 'number') {
         setHovered(null);
         return;
       }
@@ -358,6 +365,8 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
         )}
         <span
           data-testid="chart-legend"
+          data-last-bar-time={series.lastBar?.time ?? ''}
+          data-last-bar-close={series.lastBar?.close ?? ''}
           className="flex items-center gap-2 font-mono tabular-nums text-[var(--text-secondary)]"
         >
           {legend.map((item) => (

@@ -3,8 +3,8 @@
 # the WebSocket contract (all TPs + auth/ownership), security behaviors
 # (401/403, CORS, rate limiting, XFF spoofing), and observability.
 #
-# Run against a gateway wired to scripts/mockmt5 (or a staging MT5):
-#   go run ./scripts/mockmt5 &          # :5199
+# Run against a gateway wired to cmd/demomarket (or a staging MT5):
+#   go run ./cmd/demomarket &          # :5199
 #   MT5_HOST_URL=http://127.0.0.1 MT5_PORT=5199 CRM_URL=http://127.0.0.1:5199 ... ./bin/gateway &
 #   BASE_URL=http://localhost:5063 ./scripts/e2e_test.sh
 #

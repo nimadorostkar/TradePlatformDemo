@@ -1,56 +1,44 @@
 # TradePlatformDemo
 
-A full-stack trading platform in one repository:
+A full-stack **demo** trading platform in one repository. It never connects to a
+real broker: the gateway's only upstream is a built-in market simulator, and every
+account is demo funds.
 
 | Package                    | What it is                                                                                              | Stack                                 |
 | -------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | [`frontend/`](frontend/)   | Broker-branded web trading terminal — TradingView is the charting engine, everything around it is ours. | React 19, TypeScript, Vite, Tailwind  |
-| [`backend/`](backend/)     | MT5 gateway — exposes the MetaTrader 5 Manager Web API as REST + a `/ws` streaming endpoint.            | Go, PostgreSQL/TimescaleDB, Redis, NATS |
+| [`backend/`](backend/)     | Trading gateway (REST + `/ws` streaming) in front of `cmd/demomarket`, a simulated market and CRM that speaks the MT5 Manager API contract. | Go, PostgreSQL/TimescaleDB, Redis, NATS |
 
 Each package has its own README with the full story:
 
 - [`frontend/README.md`](frontend/README.md) — terminal architecture, commands, chart data flow
 - [`backend/README.md`](backend/README.md) — gateway design, endpoint parity, deployment
 
-> **This is a real-money system.** Read
+> **Demo only.** No real broker, CRM, or money is involved anywhere in this
+> repository or its deployment. The code paths are production-shaped (the
+> gateway speaks the MT5 Manager API contract to the simulator), so the usual
+> care still applies: read
 > [`frontend/docs/integration/contract-discrepancies.md`](frontend/docs/integration/contract-discrepancies.md)
 > and [`backend/docs/VOLUME-UNITS.md`](backend/docs/VOLUME-UNITS.md) before touching
 > order entry on either side.
 
-## Quick start (full stack, no broker needed)
+## Quick start
 
 ```bash
 make setup                        # npm ci + go mod download
-make dev                          # mock MT5/CRM :5199 → gateway :5063 → terminal :3100
+make dev                          # demo market simulator :5199 → gateway :5063 → terminal :3100
 ```
 
 Open <http://localhost:3100> and sign in with `trader@example.com` /
-`correct-password` (the mock CRM's user). Everything the terminal does — login,
-account list, quotes, chart history, positions, orders, the `/ws` stream — goes
-through the real Go gateway; only MetaTrader and the CRM are stand-ins
-(`backend/scripts/mockmt5`). Ctrl-C stops all three processes.
+`correct-password`. Everything the terminal does — login, account list, quotes,
+chart history, positions, orders, the `/ws` stream — goes through the Go gateway;
+prices come from `backend/cmd/demomarket`, a deterministic market simulator with
+nine instruments (FX majors, gold, bitcoin). Ctrl-C stops all three processes.
 
 How it is wired: the browser talks only to the Vite origin, which proxies
-`/gateway` → gateway and `/crm` → CRM exactly like the production edge
-(`deploy/edge/nginx.conf`). The gateway runs from `backend/.env.mock` — every
-value there is a placeholder; nothing can reach a broker.
-
-### Against a real broker
-
-```bash
-cp backend/.env.example backend/.env       # MT5_* credentials, JWT_SECRET_KEY, CRM_URL,
-                                           # CRM_ACCOUNT_TYPE_SUFFIXES for your account types
-make backend                               # gateway on :5063 (sources nothing — export .env yourself)
-make frontend                              # terminal on :3100, proxying to the gateway
-```
-
-The broker IP-whitelists its Manager API, so real MT5 data only flows from a
-whitelisted host — locally you will see the sign-in screen but no accounts.
-
-**Chart.** Candles are drawn with the open-source
-[Lightweight Charts](https://github.com/tradingview/lightweight-charts) library
-(Apache-2.0, an ordinary npm dependency). No licence, no external service, no
-third-party prices: every bar comes from the gateway (`frontend/src/features/chart/`).
+`/gateway` → gateway and `/crm` → simulator exactly like the deployed edge
+(`deploy/edge/nginx.conf`). The gateway runs from `backend/.env.demo` with
+`TRADING_MODE=demo`; every value there is a placeholder.
 
 ## Layout
 
@@ -58,7 +46,7 @@ third-party prices: every bar comes from the gateway (`frontend/src/features/cha
 .
 ├── frontend/          # web terminal (Vite app; own package.json, tests, deploy/)
 ├── backend/           # Go gateway (own go.mod, Makefile, deploy/, docs/)
-├── scripts/dev.sh     # `make dev`: mock MT5/CRM + gateway + Vite, one Ctrl-C
+├── scripts/dev.sh     # `make dev`: demo market simulator + gateway + Vite, one Ctrl-C
 ├── deploy/            # docker compose stack + deploy.sh (edge nginx, prebuilt SPA, gateway, mock)
 └── Makefile           # root fan-out: setup / dev / build / test / check
 ```
@@ -76,15 +64,13 @@ SSH_HOST=root@1.2.3.4 SSH_KEY=~/.ssh/key EDGE_PORT=8080 deploy/deploy.sh
 One Docker Compose project (`deploy/docker-compose.yml`) on a single public port:
 an nginx **edge** serving the SPA at `/` and proxying `/gateway/` (REST + WebSocket)
 and `/crm/` same-origin — the production layout — in front of the **frontend**
-(prebuilt SPA, unprivileged nginx), the Go **gateway** (distroless) and **mockmt5**.
+(prebuilt SPA, unprivileged nginx), the Go **gateway** (distroless) and **demomarket**.
 
 - The terminal is built on the machine running the script; only `dist/` is
   shipped, so the host needs no Node toolchain.
 - `gateway.env` is generated on the host on first deploy with fresh random
   `JWT_SECRET_KEY` / `MANAGER_API_KEY` and never overwritten; nothing secret leaves
-  your machine. To go live, edit `MT5_*` / `CRM_URL` /
-  `CRM_ACCOUNT_TYPE_SUFFIXES` in `/opt/tradeplatform/deploy/gateway.env` and
-  `docker compose up -d`.
+  your machine. It points the gateway at the `demomarket` service only.
 - Served over plain HTTP on an IP: the gateway's session-restore cookies are
   `Secure`-only, so a page reload asks for sign-in again. Put a domain + TLS in
   front (`PUBLIC_ORIGIN=https://…` switches the terminal to production mode) and

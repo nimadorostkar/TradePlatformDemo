@@ -483,7 +483,7 @@ Results: [TEST_RESULTS.md](TEST_RESULTS.md), [ENDPOINT_TEST_RESULTS.md](ENDPOINT
   WS hub + poller + bus, jobs, Redis limiter (miniredis), response envelope.
 - **Golden parity** — `internal/httpapi/handlers/testdata/golden/*.json` freeze
   the exact wire output for the three data-shape classes.
-- **Live** — full mock MT5 + CRM (74 REST + 14 WS), then verified against the
+- **Live** — full demo market simulator (74 REST + 14 WS), then verified against the
   real broker on the VPS.
 - **Smoke** — `scripts/smoke_test.sh` (health, authed REST, WS 101).
 

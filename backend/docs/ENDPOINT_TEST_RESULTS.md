@@ -1,7 +1,7 @@
 # Mock Endpoint Test Results
 
 Every REST endpoint and every WebSocket dispatch driven through the **running
-gateway** against a full mock MT5 + CRM upstream (all `/api/*` and `/client-api/*`
+gateway** against a full demo market simulator upstream (all `/api/*` and `/client-api/*`
 paths stubbed with valid payloads). Token obtained via the CRM login path
 (account-scoped JWT with `accounts=1001,1002`), so `[AccountsAuthorize]`
 endpoints are exercised for real.

@@ -2,9 +2,8 @@
 #
 #   browser ──► edge (nginx) ──► frontend (nginx, prebuilt SPA)
 #                             ├─► gateway  (Go, MT5 Manager API gateway)
-#                             └─► mockmt5  (MT5 + CRM stand-in; replace with
-#                                           real MT5_HOST_URL/CRM_URL in
-#                                           gateway.env to go live)
+#                             └─► demomarket (simulated market + CRM — this is
+#                                             a demo platform; no broker exists)
 #
 # Run from this directory on the host: docker compose up -d --build
 # gateway.env is created by deploy.sh (fresh random secrets) — see
@@ -42,13 +41,13 @@ services:
     restart: unless-stopped
     env_file: gateway.env
     depends_on:
-      - mockmt5
+      - demomarket
     networks: [platform]
 
-  mockmt5:
+  demomarket:
     build:
       context: ../backend
-      dockerfile: deploy/docker/Dockerfile.mockmt5
+      dockerfile: deploy/docker/Dockerfile.demomarket
     restart: unless-stopped
     networks: [platform]
 

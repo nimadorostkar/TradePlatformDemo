@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Run the whole platform locally against the in-repo mock MT5/CRM:
+# Run the whole platform locally against the in-repo demo market simulator:
 #
-#   mock MT5 + CRM   127.0.0.1:5199   (backend/scripts/mockmt5)
-#   Go gateway       127.0.0.1:5063   (backend/.env.mock)
+#   demo market simulator   127.0.0.1:5199   (backend/cmd/demomarket)
+#   Go gateway       127.0.0.1:5063   (backend/.env.demo)
 #   web terminal     http://localhost:3100  (Vite; proxies /gateway and /crm)
 #
-# Sign in with  trader@example.com / correct-password  (mock CRM users).
+# Sign in with  trader@example.com / correct-password  (demo CRM users).
 # Ctrl-C stops all three. Logs go to .dev-logs/.
 set -euo pipefail
 
@@ -27,17 +27,17 @@ if [ ! -f "$ROOT/frontend/.env" ]; then
 fi
 
 echo "▸ building gateway + mock"
-( cd "$ROOT/backend" && go build -o bin/gateway ./cmd/gateway && go build -o bin/mockmt5 ./scripts/mockmt5 )
+( cd "$ROOT/backend" && go build -o bin/gateway ./cmd/gateway && go build -o bin/demomarket ./cmd/demomarket )
 
-echo "▸ mock MT5/CRM  :5199"
-( cd "$ROOT/backend" && exec ./bin/mockmt5 -addr 127.0.0.1:5199 ) >"$LOGS/mockmt5.log" 2>&1 &
+echo "▸ demo market simulator  :5199"
+( cd "$ROOT/backend" && exec ./bin/demomarket -addr 127.0.0.1:5199 ) >"$LOGS/demomarket.log" 2>&1 &
 PIDS+=($!)
 # The gateway authenticates its MT5 session at startup and only retries on
 # its 20 s ping loop, so the mock must be listening before the gateway starts.
 for _ in $(seq 1 40); do curl -s -o /dev/null http://127.0.0.1:5199/ && break; sleep 0.25; done
 
 echo "▸ gateway       :5063"
-( cd "$ROOT/backend" && set -a && . ./.env.mock && set +a && exec ./bin/gateway ) >"$LOGS/gateway.log" 2>"$LOGS/gateway.err" &
+( cd "$ROOT/backend" && set -a && . ./.env.demo && set +a && exec ./bin/gateway ) >"$LOGS/gateway.log" 2>"$LOGS/gateway.err" &
 PIDS+=($!)
 for _ in $(seq 1 120); do curl -fsS http://127.0.0.1:5063/readyz >/dev/null 2>&1 && break; sleep 0.25; done
 curl -fsS http://127.0.0.1:5063/readyz >/dev/null || { echo "gateway did not become ready — see $LOGS/gateway.log" >&2; exit 1; }
@@ -51,7 +51,7 @@ cat <<MSG
 
   ✔ running — open http://localhost:3100
     sign in: trader@example.com / correct-password
-    logs:    $LOGS/{mockmt5,gateway,vite}.log
+    logs:    $LOGS/{demomarket,gateway,vite}.log
 
 MSG
 wait -n "${PIDS[@]}" 2>/dev/null || wait

@@ -1,9 +1,13 @@
 # TradePlatform Gateway (backend)
 
-A production-grade **Go** rewrite of the .NET 8 **LegacyMTSocket** gateway — the service
-that sits between TradePlatform client apps (web, TradingView UI, the `ClientWS` console)
-and the **MetaTrader 5 Manager Web API** (`mt5.example.com`). It exposes the MT5
-API as REST endpoints, a `/ws` streaming endpoint, and is designed to scale to ~1,000,000
+> **Demo platform.** In this repository the gateway's only upstream is
+> [`cmd/demomarket`](cmd/demomarket/main.go), a simulator that speaks the MT5
+> Manager Web API and CRM contracts with synthetic prices and sample accounts.
+> No real trading server is configured, reachable, or required anywhere.
+
+A **Go** gateway, ported from a .NET 8 service (**LegacyMTSocket**), that sits between
+the web terminal and an MT5-Manager-API-shaped upstream. It exposes that API as REST
+endpoints plus a `/ws` streaming endpoint, and is designed to scale to ~1,000,000
 users.
 
 > **Backward compatibility is the prime directive.** Routes, payloads (incl. exact JSON
