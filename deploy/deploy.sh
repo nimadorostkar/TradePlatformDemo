@@ -149,6 +149,14 @@ upsert .env TERMINAL_HOST '$TERMINAL_HOST'
 upsert .env CLIENT_AREA_HOST '$CLIENT_AREA_HOST'
 upsert .env EDGE_PORT '$EDGE_PORT'
 upsert gateway.env SESSION_COOKIE_DOMAIN '$COOKIE_DOMAIN'
+# The gateway's WebSocket origin allowlist must name every origin the
+# terminal is served on; entries added by hand (an upcoming domain) are kept.
+merged="$(grep '^CORS_ALLOWED_ORIGINS=' gateway.env | cut -d= -f2-)"
+for o in '$PUBLIC_ORIGIN' '$TERMINAL_ORIGIN' '$CLIENT_AREA_ORIGIN'; do
+  [ -n "\$o" ] || continue
+  case ",\$merged," in *",\$o,"*) ;; *) merged="\${merged:+\$merged,}\$o" ;; esac
+done
+upsert gateway.env CORS_ALLOWED_ORIGINS "\$merged"
 # A deploy interrupted mid-recreate leaves the old container renamed
 # <hash>_tradeplatform-<svc>-1; the next recreate then fails on that name.
 docker ps -aq --filter 'name=^/[0-9a-f]{12}_tradeplatform-' | xargs -r docker rm -f >/dev/null
@@ -168,14 +176,36 @@ curl -fsS "$PUBLIC_ORIGIN/gateway/readyz"; echo
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
   "$PUBLIC_ORIGIN/gateway/api/Authentication/crmlogin" -d '{"email":"trader@example.com","password":"wrong"}')
 [ "$code" = 401 ] && echo "auth path OK (bad password → 401)" || { echo "unexpected crmlogin status $code" >&2; exit 1; }
-# Each subdomain answers through the edge by name (resolved to the host, so
-# the check works before DNS has propagated to this machine).
+# The WebSocket stream must accept every origin the terminal is served on:
+# a browser on a subdomain missing from the gateway's allowlist gets a 403
+# on /ws and a terminal that never streams. Probed with the documented demo
+# sign-in; 101 is the upgrade, anything else is a misconfiguration.
+crm=$(curl -s -X POST -H 'Content-Type: application/json' "$PUBLIC_ORIGIN/gateway/api/Authentication/crmlogin" \
+  -d '{"email":"trader@example.com","password":"correct-password"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+jwt=$(curl -s -X POST -H 'Content-Type: application/json' "$PUBLIC_ORIGIN/gateway/api/Authentication/login" \
+  -d "{\"Username\":\"trader@example.com\",\"CRMToken\":\"$crm\",\"Remember\":false}" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+ws_probe() { # $1 origin, $2 host to resolve (empty: as-is)
+  local origin="$1" host="$2" port resolve=()
+  port="${origin##*:}"; case "$origin" in *://*:*) ;; https://*) port=443 ;; *) port=80 ;; esac
+  [ -n "$host" ] && resolve=(--resolve "${host}:${port}:${HOST_IP}")
+  curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${resolve[@]}" \
+    -H "Origin: $origin" -H "Authorization: Bearer $jwt" \
+    -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+    -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Protocol: tradeplatform.v1' \
+    "$origin/gateway/ws?symbol=EURUSD&methodtype=GetQuotes&TP=1" || true
+}
 HOST_IP="${SSH_HOST#*@}"
+code=$(ws_probe "$PUBLIC_ORIGIN" "")
+[ "$code" = 101 ] && echo "websocket OK at ${PUBLIC_ORIGIN}" || { echo "websocket at ${PUBLIC_ORIGIN} answered ${code} (origin not allowed?)" >&2; exit 1; }
+# Each subdomain answers through the edge by name (resolved to the host, so
+# the check works before DNS has propagated to this machine), REST and stream.
 for pair in "terminal|$TERMINAL_HOST|$TERMINAL_ORIGIN" "client area|$CLIENT_AREA_HOST|$CLIENT_AREA_ORIGIN"; do
   IFS='|' read -r label host origin <<<"$pair"
   [ -n "$host" ] || continue
   port="${origin##*:}"; case "$origin" in *://*:*) ;; https://*) port=443 ;; *) port=80 ;; esac
   code=$(curl -s -o /dev/null -w '%{http_code}' --resolve "${host}:${port}:${HOST_IP}" "$origin/gateway/readyz" || true)
   [ "$code" = 200 ] && echo "${label} OK at ${origin}" || { echo "${label} at ${origin} answered ${code}" >&2; exit 1; }
+  code=$(ws_probe "$origin" "$host")
+  [ "$code" = 101 ] && echo "${label} websocket OK" || { echo "${label} websocket at ${origin} answered ${code} (origin not allowed?)" >&2; exit 1; }
 done
 echo "✔ deployed ${VERSION} → ${PUBLIC_ORIGIN}${TERMINAL_HOST:+  ·  ${TERMINAL_ORIGIN}}${CLIENT_AREA_HOST:+  ·  ${CLIENT_AREA_ORIGIN}}"
