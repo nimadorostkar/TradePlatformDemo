@@ -75,6 +75,42 @@ func TestLogin_OverPlainHTTPSetsRestorableCookies(t *testing.T) {
 	}
 }
 
+// With a shared cookie domain configured, cookies set on a subdomain of it
+// carry Domain so the sibling subdomain (terminal ↔ client area) shares the
+// sign-in; a request on any other host — the bare IP — keeps host-only
+// cookies rather than a Domain the browser would refuse.
+func TestLogin_SharedCookieDomainOnlyOnItsHosts(t *testing.T) {
+	crm := crmStub(t)
+	defer crm.Close()
+	a := sessionAPI(t, crm.URL)
+	a.d.SessionCookieDomain = ".example.com"
+
+	login := func(host string) *http.Cookie {
+		r := httptest.NewRequest(http.MethodPost, "/api/Authentication/login",
+			strings.NewReader(`{"Username":"alice@example.com","CRMToken":"crm-token-value","Remember":true}`))
+		r.Host = host
+		r.Header.Set("X-Forwarded-Proto", "https")
+		w := httptest.NewRecorder()
+		a.Login(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("login on %s: status %d", host, w.Code)
+		}
+		return cookieByName(w.Result(), "tradeplatform_session")
+	}
+	if c := login("my.example.com"); c.Domain != "example.com" {
+		t.Errorf("subdomain login: Domain = %q, want example.com", c.Domain)
+	}
+	if c := login("trade.example.com:8443"); c.Domain != "example.com" {
+		t.Errorf("subdomain with port: Domain = %q, want example.com", c.Domain)
+	}
+	if c := login("203.0.113.10:8080"); c.Domain != "" {
+		t.Errorf("bare IP: Domain = %q, want host-only", c.Domain)
+	}
+	if c := login("notexample.com"); c.Domain != "" {
+		t.Errorf("look-alike host: Domain = %q, want host-only", c.Domain)
+	}
+}
+
 func TestLogin_SetsHardenedSessionCookies(t *testing.T) {
 	crm := crmStub(t)
 	defer crm.Close()

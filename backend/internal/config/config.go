@@ -187,6 +187,12 @@ type JWT struct {
 	// cookie-held CRM token when the stored one has expired, so this window
 	// is decoupled from (and much longer than) the bearer lifetime.
 	RestoreTTL time.Duration `env:"SESSION_RESTORE_TTL" envDefault:"720h"`
+	// CookieDomain scopes the session cookies to a parent domain so the
+	// terminal and the client area on sibling subdomains (trade.example.com,
+	// my.example.com) share one sign-in. Empty: host-only cookies, the right
+	// default for a single host or a bare IP (browsers refuse a Domain that
+	// is an IP address anyway).
+	CookieDomain string `env:"SESSION_COOKIE_DOMAIN"`
 }
 
 // Security holds the hardened-default toggles. Defaults are the secure choice;

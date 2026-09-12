@@ -12,6 +12,7 @@ import {
   CircleUser,
 } from 'lucide-react';
 import { cn } from '@/components/ui/cn';
+import { clientAreaHref } from '@/app/surfaces';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Badge, Button, Money, Unavailable } from '@/components/ui/primitives';
 import { useBrand } from '@/app/providers/brand-provider';
@@ -383,7 +384,7 @@ export function TerminalHeader({ onOpenCommandPalette }: { onOpenCommandPalette:
 
         {/* The personal area: accounts, deposits, verification, profile. */}
         <a
-          href="/pa/trading/accounts"
+          href={clientAreaHref('/trading/accounts')}
           aria-label="Personal area"
           title="Personal area"
           className="inline-flex h-7 items-center justify-center rounded px-2 text-text-secondary hover:bg-[var(--surface-raised)] hover:text-text-primary max-lg:h-10 max-lg:w-10"

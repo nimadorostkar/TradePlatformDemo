@@ -1,0 +1,115 @@
+# Rendered by the nginx image's entrypoint (envsubst on ${TERMINAL_HOST} and
+# ${CLIENT_AREA_HOST} only — see NGINX_ENVSUBST_FILTER in docker-compose.yml);
+# every other $variable below is nginx's own.
+
+# ── Shared routing: the SPA at /, the gateway at /gateway/, the CRM at /crm/ ─
+# (nginx has no macros; the three blocks repeat this deliberately so each
+# host can later point at a different frontend container.)
+
+# The bare IP or any name not configured: both applications on one host.
+server {
+  listen 80 default_server;
+  server_name _;
+
+  set $frontend http://frontend:8080;
+  set $gateway  http://gateway:5063;
+  set $crm      http://demomarket:5199;
+
+  location /gateway/ {
+    rewrite ^/gateway/(.*)$ /$1 break;
+    proxy_pass $gateway;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+  }
+  location /crm/ {
+    rewrite ^/crm/(.*)$ /$1 break;
+    proxy_pass $crm;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+  location / {
+    proxy_pass $frontend;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+}
+
+# The trading terminal on its own subdomain.
+server {
+  listen 80;
+  server_name ${TERMINAL_HOST};
+
+  set $frontend http://frontend:8080;
+  set $gateway  http://gateway:5063;
+  set $crm      http://demomarket:5199;
+
+  location /gateway/ {
+    rewrite ^/gateway/(.*)$ /$1 break;
+    proxy_pass $gateway;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+  }
+  location /crm/ {
+    rewrite ^/crm/(.*)$ /$1 break;
+    proxy_pass $crm;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+  location / {
+    proxy_pass $frontend;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+}
+
+# The client area (personal area) on its own subdomain.
+server {
+  listen 80;
+  server_name ${CLIENT_AREA_HOST};
+
+  set $frontend http://frontend:8080;
+  set $gateway  http://gateway:5063;
+  set $crm      http://demomarket:5199;
+
+  location /gateway/ {
+    rewrite ^/gateway/(.*)$ /$1 break;
+    proxy_pass $gateway;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+  }
+  location /crm/ {
+    rewrite ^/crm/(.*)$ /$1 break;
+    proxy_pass $crm;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+  location / {
+    proxy_pass $frontend;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+}

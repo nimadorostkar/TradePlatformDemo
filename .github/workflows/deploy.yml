@@ -107,6 +107,11 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
           PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+          # Optional subdomains for the terminal and the client area (README →
+          # Subdomains). Unset: both on PUBLIC_ORIGIN, the client area under /pa.
+          TERMINAL_HOST: ${{ vars.TERMINAL_HOST }}
+          CLIENT_AREA_HOST: ${{ vars.CLIENT_AREA_HOST }}
+          EDGE_PORT: ${{ vars.EDGE_PORT || '8080' }}
         run: |
           : "${PUBLIC_ORIGIN:?set the repository variable PUBLIC_ORIGIN, e.g. http://203.0.113.10:8080}"
           export SSH_KEY="$HOME/.ssh/deploy_key"

@@ -347,9 +347,10 @@ func run() error {
 				CacheTTL: cfg.Content.CacheTTL,
 				Timeout:  cfg.Content.Timeout,
 			}),
-			JWT:        jwtAuth,
-			JWTSecret:  cfg.JWT.SecretKey,
-			SessionTTL: cfg.JWT.RestoreTTL,
+			JWT:                 jwtAuth,
+			JWTSecret:           cfg.JWT.SecretKey,
+			SessionTTL:          cfg.JWT.RestoreTTL,
+			SessionCookieDomain: cfg.JWT.CookieDomain,
 			Environment: handlers.EnvironmentInfo{
 				Name:        cfg.Observability.Environment,
 				TradingMode: cfg.Observability.TradingMode,

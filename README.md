@@ -189,6 +189,43 @@ and `/crm/` same-origin — the production layout — in front of the **frontend
   use; until then the bearer token and cookies travel in clear alike.
 - Every container restarts with Docker; the stack survives a reboot.
 
+### Subdomains: terminal and client area as two sites
+
+One build serves both applications, and each can have its own subdomain —
+`trade.example.com` for the terminal, `my.example.com` for the client area —
+with the bare IP still serving both (terminal at `/`, client area under `/pa`).
+The SPA reads which origin it is on and serves the right application from the
+root (`frontend/src/app/surfaces.ts`); the edge routes by host name
+(`deploy/edge/templates/hosts.conf.template`); and the gateway sets its
+session cookies on the common parent domain (`SESSION_COOKIE_DOMAIN`), so
+signing in on one subdomain signs you in on the other.
+
+1. DNS: an `A` record for each name → the server's IP.
+2. Deploy with the names (port 80 unless something else fronts the edge):
+
+   ```bash
+   TERMINAL_HOST=trade.example.com CLIENT_AREA_HOST=my.example.com EDGE_PORT=80 deploy/deploy.sh
+   ```
+
+   or, for CI, set the repository variables once and push:
+
+   ```bash
+   gh variable set TERMINAL_HOST    --body 'trade.example.com'
+   gh variable set CLIENT_AREA_HOST --body 'my.example.com'
+   gh variable set EDGE_PORT        --body '80'
+   gh variable set PUBLIC_ORIGIN    --body 'http://<server ip>'
+   ```
+
+`deploy.sh` derives the origins and the cookie domain, writes them into
+`frontend.env` / `gateway.env` / `.env` on the host, and smoke-tests each
+name through the edge. Cross-links follow: **Trade** in the client area opens
+`trade.…/?account=…`, the terminal's person icon opens `my.…/trading/accounts`.
+Until DNS exists, `*.nip.io` names (`my.203.0.113.10.nip.io`) resolve to the
+IP with no setup and exercise the whole path. TLS: put a certificate-terminating
+proxy (Caddy, Traefik, a cloud load balancer) in front of the edge on 443 with
+`X-Forwarded-Proto: https`, set `PUBLIC_ORIGIN=https://…`, and the terminal
+switches to production mode and Secure cookies on its own.
+
 ### CI/CD
 
 `.github/workflows/deploy.yml` runs on every push and pull request:

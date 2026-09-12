@@ -56,6 +56,15 @@ const bool = z
   .optional()
   .transform((v) => v === 'true' || v === '1');
 
+/** An origin — scheme and host only — or empty for "not configured". */
+const origin = z
+  .string()
+  .optional()
+  .transform((v) => (v ?? '').trim().replace(/\/+$/, ''))
+  .refine((v) => v === '' || /^https?:\/\/[^/?#]+$/.test(v), {
+    message: 'must be an origin like https://my.example.com (no path)',
+  });
+
 const envSchema = z.object({
   VITE_APP_ENV: z.enum(['development', 'staging', 'production']).default('development'),
   VITE_GATEWAY_HTTP_URL: httpUrl,
@@ -69,6 +78,18 @@ const envSchema = z.object({
   VITE_ENABLE_ONE_CLICK_TRADING: bool,
   VITE_ENABLE_LEGACY_AUTH_STORAGE: bool,
   VITE_ALLOWED_HOST_ORIGINS: z.string().default(''),
+  /**
+   * Which application this deployment serves. `auto` (the default) decides by
+   * origin and path: the client area on CLIENT_AREA_ORIGIN, the terminal on
+   * TERMINAL_ORIGIN, and both — the terminal at /, the client area under /pa —
+   * on any other host. `terminal` / `client-area` pin one surface whatever
+   * the address, for a host set up to serve just that.
+   */
+  VITE_APP_SURFACE: z.enum(['auto', 'terminal', 'client-area']).default('auto'),
+  /** The terminal's own origin when it lives on its own subdomain. */
+  VITE_TERMINAL_ORIGIN: origin,
+  /** The client area's own origin when it lives on its own subdomain. */
+  VITE_CLIENT_AREA_ORIGIN: origin,
   VITE_APP_VERSION: z.string().default('0.0.0-dev'),
   VITE_QUOTE_STALE_AFTER_MS: z.coerce.number().int().positive().default(12_000),
 });
@@ -83,6 +104,9 @@ export type AppEnv = {
   confirmTrades: boolean;
   enableOneClickTrading: boolean;
   enableLegacyAuthStorage: boolean;
+  surface: 'auto' | 'terminal' | 'client-area';
+  terminalOrigin: string;
+  clientAreaOrigin: string;
   /** postMessage origins permitted to bootstrap a host session. */
   allowedHostOrigins: readonly string[];
   appVersion: string;
@@ -165,6 +189,9 @@ export function parseEnv(raw: Record<string, unknown>, origin: string = currentO
     enableOneClickTrading: v.VITE_ENABLE_ONE_CLICK_TRADING,
     enableLegacyAuthStorage: v.VITE_ENABLE_LEGACY_AUTH_STORAGE,
     allowedHostOrigins,
+    surface: v.VITE_APP_SURFACE,
+    terminalOrigin: v.VITE_TERMINAL_ORIGIN,
+    clientAreaOrigin: v.VITE_CLIENT_AREA_ORIGIN,
     appVersion: v.VITE_APP_VERSION,
     quoteStaleAfterMs: v.VITE_QUOTE_STALE_AFTER_MS,
     isProduction,

@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/base64"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -90,6 +91,7 @@ func (a *API) setSessionCookies(w http.ResponseWriter, r *http.Request, token, c
 			Name:     name,
 			Value:    value,
 			Path:     "/",
+			Domain:   a.cookieDomainFor(r),
 			MaxAge:   maxAge,
 			HttpOnly: true,
 			Secure:   secure,
@@ -118,12 +120,47 @@ func (a *API) clearSessionCookies(w http.ResponseWriter, r *http.Request) {
 			Name:     name,
 			Value:    "",
 			Path:     "/",
+			Domain:   a.cookieDomainFor(r),
 			MaxAge:   -1,
 			HttpOnly: true,
 			Secure:   secure,
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
+}
+
+// cookieDomainFor is the configured shared cookie domain when the request
+// actually arrived on it (or a subdomain of it), else empty for a host-only
+// cookie. A browser discards a cookie whose Domain does not cover the
+// request host, so setting it blindly on the bare-IP address would leave
+// that origin with no session at all.
+func (a *API) cookieDomainFor(r *http.Request) string {
+	domain := strings.TrimPrefix(strings.ToLower(a.d.SessionCookieDomain), ".")
+	if domain == "" {
+		return ""
+	}
+	host := strings.ToLower(requestHost(r))
+	if host == domain || strings.HasSuffix(host, "."+domain) {
+		return domain
+	}
+	return ""
+}
+
+// requestHost is the host the browser addressed, without a port: the edge
+// forwards it in Host (and X-Forwarded-Host when it rewrites Host).
+func requestHost(r *http.Request) string {
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	if i := strings.IndexByte(host, ','); i >= 0 {
+		host = host[:i]
+	}
+	host = strings.TrimSpace(host)
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
 }
 
 // requestIsTLS reports whether the trader's connection is HTTPS: terminated

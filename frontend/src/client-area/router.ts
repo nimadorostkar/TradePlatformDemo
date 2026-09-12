@@ -1,27 +1,44 @@
 import { useCallback, useEffect, useState, type MouseEvent } from 'react';
+import { PA_PREFIX, clientAreaBase, terminalHref } from '@/app/surfaces';
 
 /**
- * The client area's routing: real paths under /pa, driven by the History
- * API. Small on purpose — a handful of pages, no nested layouts, no data
- * loaders — so a dependency-sized router would be mostly unused weight.
- * The terminal keeps its own convention (state in the query string at /).
+ * The client area's routing: real paths driven by the History API. Small
+ * on purpose — a handful of pages, no nested layouts, no data loaders — so
+ * a dependency-sized router would be mostly unused weight. The terminal
+ * keeps its own convention (state in the query string at /).
+ *
+ * Routes sit under /pa when the client area shares a host with the
+ * terminal and at the root on its own subdomain (see app/surfaces.ts), so
+ * they are read through getters rather than baked in at import.
  */
 
-export const PA_ROOT = '/pa';
+export const PA_ROOT = PA_PREFIX;
 
-export const ROUTES = {
-  accounts: `${PA_ROOT}/trading/accounts`,
-  performance: `${PA_ROOT}/trading/performance`,
-  orders: `${PA_ROOT}/trading/history`,
-  deposit: `${PA_ROOT}/payments/deposit`,
-  withdrawal: `${PA_ROOT}/payments/withdrawal`,
-  transfer: `${PA_ROOT}/payments/transfer`,
-  transactions: `${PA_ROOT}/payments/history`,
-  verification: `${PA_ROOT}/verification`,
-  settings: `${PA_ROOT}/settings`,
+const PATHS = {
+  accounts: '/trading/accounts',
+  performance: '/trading/performance',
+  orders: '/trading/history',
+  deposit: '/payments/deposit',
+  withdrawal: '/payments/withdrawal',
+  transfer: '/payments/transfer',
+  transactions: '/payments/history',
+  verification: '/verification',
+  settings: '/settings',
 } as const;
 
-export type Route = (typeof ROUTES)[keyof typeof ROUTES];
+export type RouteName = keyof typeof PATHS;
+export type Route = string;
+
+/** Absolute paths of every page on the current host. */
+export const ROUTES: Readonly<Record<RouteName, Route>> = Object.defineProperties(
+  {} as Record<RouteName, Route>,
+  Object.fromEntries(
+    (Object.keys(PATHS) as RouteName[]).map((name) => [
+      name,
+      { get: () => clientAreaBase() + PATHS[name], enumerable: true },
+    ]),
+  ),
+);
 
 const NAVIGATE_EVENT = 'pa:navigate';
 
@@ -32,8 +49,8 @@ export function isClientAreaPath(pathname: string): boolean {
 /** Normalises the address to a known route; unknown ones land on Accounts. */
 export function resolveRoute(pathname: string): Route {
   const trimmed = pathname.replace(/\/+$/, '') || '/';
-  for (const route of Object.values(ROUTES)) {
-    if (trimmed === route) return route;
+  for (const name of Object.keys(PATHS) as RouteName[]) {
+    if (trimmed === ROUTES[name]) return ROUTES[name];
   }
   return ROUTES.accounts;
 }
@@ -81,5 +98,5 @@ export function useLinkClick(to: string) {
 
 /** The terminal, opened on a given account (its account list honours ?account=). */
 export function terminalUrl(login?: string | null): string {
-  return login ? `/?account=${encodeURIComponent(login)}` : '/';
+  return terminalHref(login);
 }

@@ -1,6 +1,6 @@
 # Whole platform on one host, one public port (EDGE_PORT, default 8080):
 #
-#   browser ──► edge (nginx) ──► frontend (nginx, prebuilt SPA)
+#   browser ──► edge (nginx) ──► frontend (nginx, prebuilt SPA: terminal + client area)
 #                             ├─► gateway  (Go, MT5 Manager API gateway) ─┐
 #                             └─► demomarket (real market data via Yahoo  ├─► postgres
 #                                 Finance/Binance + demo broker/CRM with  │   (users, accounts,
@@ -25,6 +25,15 @@ services:
     # container on the old one (an upstream rename then 502s until a restart).
     volumes:
       - ./edge:/etc/nginx/edge:ro
+      # The image's entrypoint renders templates/*.template into conf.d with
+      # the two host names below; nginx.conf includes the result.
+      - ./edge/templates:/etc/nginx/templates:ro
+    environment:
+      # The subdomains, when there are any. `.invalid` never matches a real
+      # request, so an unset host leaves only the default server in play.
+      TERMINAL_HOST: ${TERMINAL_HOST:-terminal.invalid}
+      CLIENT_AREA_HOST: ${CLIENT_AREA_HOST:-client-area.invalid}
+      NGINX_ENVSUBST_FILTER: ^(TERMINAL_HOST|CLIENT_AREA_HOST)$$
     command: ["nginx", "-c", "/etc/nginx/edge/nginx.conf", "-g", "daemon off;"]
     depends_on:
       frontend:

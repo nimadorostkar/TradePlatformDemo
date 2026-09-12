@@ -45,6 +45,10 @@ type Deps struct {
 	// CRM token, so short bearer lifetimes do not shorten the window in which
 	// a returning browser skips the password.
 	SessionTTL time.Duration
+	// SessionCookieDomain, when set, is the Domain attribute of the session
+	// cookies — a parent domain shared by the terminal's and the client
+	// area's subdomains. Empty means host-only cookies.
+	SessionCookieDomain string
 
 	// Environment is the trusted runtime metadata served by /api/Capabilities.
 	Environment EnvironmentInfo

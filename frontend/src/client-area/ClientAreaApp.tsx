@@ -37,6 +37,7 @@ import {
   useLinkClick,
   usePathname,
   type Route,
+  type RouteName,
 } from './router';
 import { formatMoney, totalBalance, useAccounts, useMe, useVerification } from './hooks';
 
@@ -58,30 +59,41 @@ const TransactionsPage = lazy(() => import('./pages/TransactionsPage'));
 const VerificationPage = lazy(() => import('./pages/VerificationPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
-const PAGES: Record<Route, () => ReactNode> = {
-  [ROUTES.accounts]: () => <AccountsPage />,
-  [ROUTES.performance]: () => <PerformancePage />,
-  [ROUTES.orders]: () => <OrderHistoryPage />,
-  [ROUTES.deposit]: () => <DepositPage />,
-  [ROUTES.withdrawal]: () => <WithdrawalPage />,
-  [ROUTES.transfer]: () => <TransferPage />,
-  [ROUTES.transactions]: () => <TransactionsPage />,
-  [ROUTES.verification]: () => <VerificationPage />,
-  [ROUTES.settings]: () => <SettingsPage />,
-};
+function pageFor(route: Route): ReactNode {
+  switch (route) {
+    case ROUTES.performance:
+      return <PerformancePage />;
+    case ROUTES.orders:
+      return <OrderHistoryPage />;
+    case ROUTES.deposit:
+      return <DepositPage />;
+    case ROUTES.withdrawal:
+      return <WithdrawalPage />;
+    case ROUTES.transfer:
+      return <TransferPage />;
+    case ROUTES.transactions:
+      return <TransactionsPage />;
+    case ROUTES.verification:
+      return <VerificationPage />;
+    case ROUTES.settings:
+      return <SettingsPage />;
+    default:
+      return <AccountsPage />;
+  }
+}
 
 const NAV: {
   title: string;
   icon: typeof Wallet;
-  items: { label: string; to: Route | 'terminal'; icon: typeof Wallet; badge?: string }[];
+  items: { label: string; to: RouteName | 'terminal'; icon: typeof Wallet; badge?: string }[];
 }[] = [
   {
     title: 'Trading',
     icon: BarChart3,
     items: [
-      { label: 'Accounts', to: ROUTES.accounts, icon: LayoutGrid },
-      { label: 'Performance', to: ROUTES.performance, icon: BarChart3 },
-      { label: 'History of orders', to: ROUTES.orders, icon: History },
+      { label: 'Accounts', to: 'accounts', icon: LayoutGrid },
+      { label: 'Performance', to: 'performance', icon: BarChart3 },
+      { label: 'History of orders', to: 'orders', icon: History },
       { label: 'Trading terminal', to: 'terminal', icon: ExternalLink },
     ],
   },
@@ -89,18 +101,18 @@ const NAV: {
     title: 'Payments & wallet',
     icon: Wallet,
     items: [
-      { label: 'Deposit', to: ROUTES.deposit, icon: ArrowDownToLine },
-      { label: 'Withdrawal', to: ROUTES.withdrawal, icon: ArrowUpFromLine },
-      { label: 'Transfer', to: ROUTES.transfer, icon: ArrowLeftRight, badge: 'New' },
-      { label: 'Transaction history', to: ROUTES.transactions, icon: Receipt },
+      { label: 'Deposit', to: 'deposit', icon: ArrowDownToLine },
+      { label: 'Withdrawal', to: 'withdrawal', icon: ArrowUpFromLine },
+      { label: 'Transfer', to: 'transfer', icon: ArrowLeftRight, badge: 'New' },
+      { label: 'Transaction history', to: 'transactions', icon: Receipt },
     ],
   },
   {
     title: 'Profile',
     icon: CircleUser,
     items: [
-      { label: 'Verification', to: ROUTES.verification, icon: ShieldCheck },
-      { label: 'Settings', to: ROUTES.settings, icon: Settings },
+      { label: 'Verification', to: 'verification', icon: ShieldCheck },
+      { label: 'Settings', to: 'settings', icon: Settings },
     ],
   },
 ];
@@ -180,7 +192,7 @@ export function ClientAreaApp() {
         <main className="min-w-0 flex-1 overflow-y-auto">
           <VerificationBanner />
           <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-            <Suspense fallback={<LoadingState label="Loading…" />}>{PAGES[route]()}</Suspense>
+            <Suspense fallback={<LoadingState label="Loading…" />}>{pageFor(route)}</Suspense>
           </div>
         </main>
       </div>
@@ -384,8 +396,8 @@ function Sidebar({
               </button>
               {isOpen &&
                 group.items.map((item) => {
-                  const active = item.to === route;
-                  const href = item.to === 'terminal' ? terminalUrl(activeLogin) : item.to;
+                  const href = item.to === 'terminal' ? terminalUrl(activeLogin) : ROUTES[item.to];
+                  const active = href === route;
                   return (
                     <SidebarLink
                       key={item.label}

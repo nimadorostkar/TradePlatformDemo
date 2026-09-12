@@ -4,6 +4,13 @@
 #   deploy/deploy.sh                       # defaults below
 #   SSH_HOST=root@1.2.3.4 SSH_KEY=~/.ssh/k PUBLIC_ORIGIN=http://1.2.3.4:8080 deploy/deploy.sh
 #
+# Subdomains (optional): with DNS for both names pointing at the host,
+#   TERMINAL_HOST=trade.example.com CLIENT_AREA_HOST=my.example.com EDGE_PORT=80 deploy/deploy.sh
+# serves the terminal on the first, the client area on the second (each from
+# its root, with the gateway and CRM same-origin under it), keeps the bare IP
+# working as before, and shares one sign-in across both through a session
+# cookie on their common parent domain.
+#
 # What it does:
 #   1. builds the terminal here (service URLs are same-origin paths);
 #   2. rsyncs deploy/ (+ the built SPA) and backend/ source to REMOTE_DIR;
@@ -25,6 +32,38 @@ SSH_KEY="${SSH_KEY:-$HOME/.ssh/server_new_ed25519}"
 EDGE_PORT="${EDGE_PORT:-8080}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-http://${SSH_HOST#*@}:${EDGE_PORT}}"
 REMOTE_DIR="${REMOTE_DIR:-/opt/tradeplatform}"
+TERMINAL_HOST="${TERMINAL_HOST:-}"
+CLIENT_AREA_HOST="${CLIENT_AREA_HOST:-}"
+
+# The subdomains' origins share PUBLIC_ORIGIN's scheme and port; the session
+# cookie domain is their longest common parent (example.com for
+# trade.example.com + my.example.com), empty when only one or none is set.
+# A default port (:80 on http, :443 on https) is dropped everywhere: the
+# browser's own idea of its origin never carries one, and the SPA compares
+# origins verbatim to know which application it is.
+scheme_port() { local o="$1"; local scheme="${o%%://*}"; local rest="${o#*://}"; local port=""; case "$rest" in *:*) port=":${rest##*:}" ;; esac
+  if { [ "$scheme" = http ] && [ "$port" = ":80" ]; } || { [ "$scheme" = https ] && [ "$port" = ":443" ]; }; then port=""; fi
+  printf '%s|%s' "$scheme" "$port"; }
+IFS='|' read -r PUBLIC_SCHEME PUBLIC_PORT <<<"$(scheme_port "$PUBLIC_ORIGIN")"
+PUBLIC_ORIGIN="${PUBLIC_SCHEME}://${PUBLIC_ORIGIN#*://}"; PUBLIC_ORIGIN="${PUBLIC_ORIGIN%%:80}"; [ "$PUBLIC_SCHEME" = https ] && PUBLIC_ORIGIN="${PUBLIC_ORIGIN%%:443}"
+TERMINAL_ORIGIN=""; CLIENT_AREA_ORIGIN=""
+[ -n "$TERMINAL_HOST" ] && TERMINAL_ORIGIN="${PUBLIC_SCHEME}://${TERMINAL_HOST}${PUBLIC_PORT}"
+[ -n "$CLIENT_AREA_HOST" ] && CLIENT_AREA_ORIGIN="${PUBLIC_SCHEME}://${CLIENT_AREA_HOST}${PUBLIC_PORT}"
+COOKIE_DOMAIN=""
+if [ -n "$TERMINAL_HOST" ] && [ -n "$CLIENT_AREA_HOST" ]; then
+  COOKIE_DOMAIN="$(python3 - "$TERMINAL_HOST" "$CLIENT_AREA_HOST" <<'PY'
+import sys
+a, b = (h.lower().split('.') for h in sys.argv[1:3])
+common = []
+for x, y in zip(reversed(a), reversed(b)):
+    if x != y: break
+    common.append(x)
+common.reverse()
+# Need at least a registrable domain (two labels) that is a proper parent of both.
+print('.'.join(common) if len(common) >= 2 and (len(common) < len(a) or len(common) < len(b)) else '')
+PY
+)"
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)"
@@ -45,12 +84,17 @@ done
 # Service URLs are same-origin paths (see deploy/frontend.env.example), so the
 # terminal works through any address that reaches the edge, not just
 # PUBLIC_ORIGIN — which remains the address the smoke test uses.
-echo "▸ building terminal (${APP_ENV}, ${VERSION})"
+echo "▸ building terminal + client area (${APP_ENV}, ${VERSION})"
+[ -n "$TERMINAL_HOST" ] && echo "  terminal     ${TERMINAL_ORIGIN}"
+[ -n "$CLIENT_AREA_HOST" ] && echo "  client area  ${CLIENT_AREA_ORIGIN}"
+[ -n "$COOKIE_DOMAIN" ] && echo "  one sign-in across *.${COOKIE_DOMAIN}"
 ( cd "$ROOT/frontend"
   VITE_APP_ENV="$APP_ENV" \
   VITE_GATEWAY_HTTP_URL="/gateway" \
   VITE_GATEWAY_WS_URL="/gateway" \
   VITE_CRM_HTTP_URL="/crm" \
+  VITE_TERMINAL_ORIGIN="$TERMINAL_ORIGIN" \
+  VITE_CLIENT_AREA_ORIGIN="$CLIENT_AREA_ORIGIN" \
   VITE_CONFIRM_TRADES=true VITE_ENABLE_ONE_CLICK_TRADING=false VITE_ENABLE_LEGACY_AUTH_STORAGE=false \
   VITE_APP_VERSION="$VERSION" \
   npm run build --silent )
@@ -96,7 +140,15 @@ if [ ! -f gateway.env ]; then
   echo "  gateway.env created with fresh secrets"
 fi
 sed -e "s|__PUBLIC_ORIGIN__|$PUBLIC_ORIGIN|g" -e "s|__PUBLIC_WS_ORIGIN__|$PUBLIC_WS_ORIGIN|g" \
+    -e "s|__TERMINAL_ORIGIN__|$TERMINAL_ORIGIN|g" -e "s|__CLIENT_AREA_ORIGIN__|$CLIENT_AREA_ORIGIN|g" \
     -e "s|^APP_ENV=.*|APP_ENV=$APP_ENV|" -e "s|__VERSION__|$VERSION|g" frontend.env.example > frontend.env
+# Non-secret settings that may change between deploys are kept current in
+# the files created once above (secrets in them are never touched).
+upsert() { local file="\$1" key="\$2" value="\$3"; if grep -q "^\${key}=" "\$file"; then sed -i "s|^\${key}=.*|\${key}=\${value}|" "\$file"; else printf '%s=%s\n' "\$key" "\$value" >> "\$file"; fi; }
+upsert .env TERMINAL_HOST '$TERMINAL_HOST'
+upsert .env CLIENT_AREA_HOST '$CLIENT_AREA_HOST'
+upsert .env EDGE_PORT '$EDGE_PORT'
+upsert gateway.env SESSION_COOKIE_DOMAIN '$COOKIE_DOMAIN'
 # A deploy interrupted mid-recreate leaves the old container renamed
 # <hash>_tradeplatform-<svc>-1; the next recreate then fails on that name.
 docker ps -aq --filter 'name=^/[0-9a-f]{12}_tradeplatform-' | xargs -r docker rm -f >/dev/null
@@ -116,4 +168,14 @@ curl -fsS "$PUBLIC_ORIGIN/gateway/readyz"; echo
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
   "$PUBLIC_ORIGIN/gateway/api/Authentication/crmlogin" -d '{"email":"trader@example.com","password":"wrong"}')
 [ "$code" = 401 ] && echo "auth path OK (bad password → 401)" || { echo "unexpected crmlogin status $code" >&2; exit 1; }
-echo "✔ deployed ${VERSION} → ${PUBLIC_ORIGIN}"
+# Each subdomain answers through the edge by name (resolved to the host, so
+# the check works before DNS has propagated to this machine).
+HOST_IP="${SSH_HOST#*@}"
+for pair in "terminal|$TERMINAL_HOST|$TERMINAL_ORIGIN" "client area|$CLIENT_AREA_HOST|$CLIENT_AREA_ORIGIN"; do
+  IFS='|' read -r label host origin <<<"$pair"
+  [ -n "$host" ] || continue
+  port="${origin##*:}"; case "$origin" in *://*:*) ;; https://*) port=443 ;; *) port=80 ;; esac
+  code=$(curl -s -o /dev/null -w '%{http_code}' --resolve "${host}:${port}:${HOST_IP}" "$origin/gateway/readyz" || true)
+  [ "$code" = 200 ] && echo "${label} OK at ${origin}" || { echo "${label} at ${origin} answered ${code}" >&2; exit 1; }
+done
+echo "✔ deployed ${VERSION} → ${PUBLIC_ORIGIN}${TERMINAL_HOST:+  ·  ${TERMINAL_ORIGIN}}${CLIENT_AREA_HOST:+  ·  ${CLIENT_AREA_ORIGIN}}"

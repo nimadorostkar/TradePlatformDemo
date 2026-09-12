@@ -13,7 +13,7 @@ import { BrandProvider } from '@/app/providers/BrandProvider';
 import { ServicesProvider } from '@/app/providers/ServicesProvider';
 import { useServices } from '@/app/providers/services';
 import { TradingTerminalPage } from '@/app/TradingTerminalPage';
-import { isClientAreaPath } from '@/client-area/router';
+import { placementFor } from '@/app/surfaces';
 import { SignInScreen } from '@/features/auth/SignInScreen';
 import { Button, ErrorState } from '@/components/ui/primitives';
 import { BrandedLoader } from '@/components/ui/BrandedLoader';
@@ -61,14 +61,18 @@ const ClientAreaApp = lazy(() =>
 export function App() {
   // The server answers every path with this application (SPA fallback), so an
   // address that names no real view rendered the full terminal with a 200 —
-  // no 404 existed anywhere (HGH-03). The terminal keeps its state in the
-  // QUERY STRING at /; the client area owns the paths under /pa; any other
-  // path is by definition not a page.
-  const { pathname } = window.location;
-  const clientArea = isClientAreaPath(pathname);
-  if (!clientArea && pathname !== '/' && pathname !== '/index.html') {
+  // no 404 existed anywhere (HGH-03). Which application a path belongs to
+  // depends on the host as well (app/surfaces.ts): the client area may own
+  // a whole subdomain or just /pa. Anything else is by definition not a page.
+  const placement = placementFor(window.location.pathname);
+  if (placement.redirectTo) {
+    window.location.replace(placement.redirectTo);
+    return null;
+  }
+  if (placement.surface === 'not-found') {
     return <NotFoundScreen />;
   }
+  const clientArea = placement.surface === 'client-area';
   return (
     <RootErrorBoundary>
       <QueryClientProvider client={queryClient}>
