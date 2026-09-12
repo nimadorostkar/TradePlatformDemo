@@ -40,14 +40,16 @@ if [ -z "$GATEWAY_HTTP_URL" ] || [ -z "$GATEWAY_WS_URL" ]; then
   exit 1
 fi
 
+# A same-origin path ("/gateway") inherits the page's scheme; the client
+# checks that at startup, so only absolute URLs are judged here.
 if [ "$APP_ENV" = "production" ]; then
   case "$GATEWAY_HTTP_URL" in
-    https://*) ;;
-    *) echo "FATAL: GATEWAY_HTTP_URL must use https:// in production." >&2; exit 1 ;;
+    https://*|/*) ;;
+    *) echo "FATAL: GATEWAY_HTTP_URL must use https:// (or be a same-origin path) in production." >&2; exit 1 ;;
   esac
   case "$GATEWAY_WS_URL" in
-    wss://*) ;;
-    *) echo "FATAL: GATEWAY_WS_URL must use wss:// in production." >&2; exit 1 ;;
+    wss://*|/*) ;;
+    *) echo "FATAL: GATEWAY_WS_URL must use wss:// (or be a same-origin path) in production." >&2; exit 1 ;;
   esac
   # The client's own validator refuses this too. Failing at container start
   # surfaces it in the deployment logs instead of in every trader's browser.
@@ -59,9 +61,16 @@ if [ "$APP_ENV" = "production" ]; then
 fi
 
 # ── CSP ──────────────────────────────────────────────────────────────────────
-CSP_CONNECT_SRC="${GATEWAY_HTTP_URL} ${GATEWAY_WS_URL}"
-[ -n "$CRM_HTTP_URL" ] && CSP_CONNECT_SRC="${CSP_CONNECT_SRC} ${CRM_HTTP_URL}"
-[ -n "$BRAND_CONFIG_URL" ] && CSP_CONNECT_SRC="${CSP_CONNECT_SRC} ${BRAND_CONFIG_URL}"
+# connect-src already carries 'self'; a same-origin path adds nothing to it
+# and is not a valid source expression, so only absolute URLs are appended.
+CSP_CONNECT_SRC=""
+for url in "$GATEWAY_HTTP_URL" "$GATEWAY_WS_URL" "$CRM_HTTP_URL" "$BRAND_CONFIG_URL"; do
+  case "$url" in
+    ""|/*) ;;
+    *) CSP_CONNECT_SRC="${CSP_CONNECT_SRC} ${url}" ;;
+  esac
+done
+CSP_CONNECT_SRC="${CSP_CONNECT_SRC# }"
 
 # Defaults to 'none' — the terminal is not embeddable unless a host origin is
 # explicitly allowed, which is the clickjacking protection.

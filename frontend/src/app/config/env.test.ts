@@ -17,6 +17,51 @@ const PRODUCTION = {
   VITE_CRM_HTTP_URL: 'https://terminal.example.com/crm',
 };
 
+describe('same-origin service paths', () => {
+  it('resolves /gateway and /crm against the page origin, ws from http', () => {
+    const env = parseEnv(
+      {
+        VITE_APP_ENV: 'staging',
+        VITE_GATEWAY_HTTP_URL: '/gateway/',
+        VITE_GATEWAY_WS_URL: '/gateway',
+        VITE_CRM_HTTP_URL: '/crm',
+      },
+      'http://203.0.113.10:8080',
+    );
+    expect(env.gatewayHttpUrl).toBe('http://203.0.113.10:8080/gateway');
+    expect(env.gatewayWsUrl).toBe('ws://203.0.113.10:8080/gateway');
+    expect(env.crmHttpUrl).toBe('http://203.0.113.10:8080/crm');
+  });
+
+  it('inherits TLS from an https page, satisfying the production checks', () => {
+    const env = parseEnv(
+      { ...PRODUCTION, VITE_GATEWAY_HTTP_URL: '/gateway', VITE_GATEWAY_WS_URL: '/gateway' },
+      'https://terminal.example.com',
+    );
+    expect(env.gatewayWsUrl).toBe('wss://terminal.example.com/gateway');
+  });
+
+  it('still refuses production on a plaintext page', () => {
+    expect(() =>
+      parseEnv(
+        { ...PRODUCTION, VITE_GATEWAY_HTTP_URL: '/gateway', VITE_GATEWAY_WS_URL: '/gateway' },
+        'http://203.0.113.10:8080',
+      ),
+    ).toThrow(EnvValidationError);
+  });
+
+  it('rejects protocol-relative and bare values', () => {
+    expect(() => parseEnv({ ...PRODUCTION, VITE_CRM_HTTP_URL: '//evil.example/crm' })).toThrow(
+      EnvValidationError,
+    );
+    expect(() => parseEnv({ ...PRODUCTION, VITE_CRM_HTTP_URL: 'crm' })).toThrow(EnvValidationError);
+  });
+
+  it('needs an origin to resolve a path (none outside a browser)', () => {
+    expect(() => parseEnv({ ...PRODUCTION, VITE_CRM_HTTP_URL: '/crm' }, '')).toThrow(/page origin/);
+  });
+});
+
 describe('production hardening', () => {
   it('accepts a fully secure production configuration', () => {
     const env = parseEnv(PRODUCTION);

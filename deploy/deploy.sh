@@ -5,7 +5,7 @@
 #   SSH_HOST=root@1.2.3.4 SSH_KEY=~/.ssh/k PUBLIC_ORIGIN=http://1.2.3.4:8080 deploy/deploy.sh
 #
 # What it does:
-#   1. builds the terminal here with the public URLs compiled in as fallbacks;
+#   1. builds the terminal here (service URLs are same-origin paths);
 #   2. rsyncs deploy/ (+ the built SPA) and backend/ source to REMOTE_DIR;
 #   3. on the host: writes .env (database password, admin token) and
 #      gateway.env once with fresh random secrets, writes frontend.env, then
@@ -42,12 +42,15 @@ for attempt in $(seq 1 8); do
   echo "  ssh attempt $attempt failed; retrying in 15s"; sleep 15
 done
 
-echo "▸ building terminal (${APP_ENV}, ${PUBLIC_ORIGIN}, ${VERSION})"
+# Service URLs are same-origin paths (see deploy/frontend.env.example), so the
+# terminal works through any address that reaches the edge, not just
+# PUBLIC_ORIGIN — which remains the address the smoke test uses.
+echo "▸ building terminal (${APP_ENV}, ${VERSION})"
 ( cd "$ROOT/frontend"
   VITE_APP_ENV="$APP_ENV" \
-  VITE_GATEWAY_HTTP_URL="${PUBLIC_ORIGIN}/gateway" \
-  VITE_GATEWAY_WS_URL="${PUBLIC_WS_ORIGIN}/gateway" \
-  VITE_CRM_HTTP_URL="${PUBLIC_ORIGIN}/crm" \
+  VITE_GATEWAY_HTTP_URL="/gateway" \
+  VITE_GATEWAY_WS_URL="/gateway" \
+  VITE_CRM_HTTP_URL="/crm" \
   VITE_CONFIRM_TRADES=true VITE_ENABLE_ONE_CLICK_TRADING=false VITE_ENABLE_LEGACY_AUTH_STORAGE=false \
   VITE_APP_VERSION="$VERSION" \
   npm run build --silent )

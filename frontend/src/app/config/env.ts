@@ -11,17 +11,45 @@ import { z } from 'zod';
  * than letting a misconfigured build fail later with a confusing network error.
  */
 
+/**
+ * A service URL is either absolute, or a same-origin path ("/gateway") that
+ * is resolved against the page's own origin at startup. The deployed edge
+ * proxies the gateway and CRM next to the terminal, so a relative value makes
+ * one build reachable through any hostname that points at the edge — the
+ * server's IP, a domain, a tunnel — where an absolute one would turn every
+ * request cross-origin the moment the address bar differs from it.
+ */
+const isSameOriginPath = (v: string) => v.startsWith('/') && !v.startsWith('//');
+
 const httpUrl = z
   .string()
   .min(1)
   .transform((v) => v.replace(/\/+$/, ''))
-  .refine((v) => /^https?:\/\//.test(v), { message: 'must start with http:// or https://' });
+  .refine((v) => /^https?:\/\//.test(v) || isSameOriginPath(v), {
+    message: 'must start with http://, https:// or be a same-origin path like /gateway',
+  });
 
 const wsUrl = z
   .string()
   .min(1)
   .transform((v) => v.replace(/\/+$/, ''))
-  .refine((v) => /^wss?:\/\//.test(v), { message: 'must start with ws:// or wss://' });
+  .refine((v) => /^wss?:\/\//.test(v) || isSameOriginPath(v), {
+    message: 'must start with ws://, wss:// or be a same-origin path like /gateway',
+  });
+
+/** The page's origin, e.g. "https://terminal.example.com"; empty outside a browser. */
+function currentOrigin(): string {
+  return typeof window === 'undefined' ? '' : window.location.origin;
+}
+
+function resolveHttp(value: string, origin: string): string {
+  return isSameOriginPath(value) ? origin + value : value;
+}
+
+function resolveWs(value: string, origin: string): string {
+  if (!isSameOriginPath(value)) return value;
+  return origin.replace(/^http/, 'ws') + value;
+}
 
 const bool = z
   .string()
@@ -74,15 +102,33 @@ export class EnvValidationError extends Error {
   }
 }
 
-export function parseEnv(raw: Record<string, unknown>): AppEnv {
+export function parseEnv(raw: Record<string, unknown>, origin: string = currentOrigin()): AppEnv {
   const result = envSchema.safeParse(raw);
   if (!result.success) {
     throw new EnvValidationError(
       result.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`),
     );
   }
-  const v = result.data;
-  const isProduction = v.VITE_APP_ENV === 'production';
+  const parsed = result.data;
+  const isProduction = parsed.VITE_APP_ENV === 'production';
+  if (
+    !origin &&
+    [parsed.VITE_GATEWAY_HTTP_URL, parsed.VITE_GATEWAY_WS_URL, parsed.VITE_CRM_HTTP_URL].some(
+      isSameOriginPath,
+    )
+  ) {
+    throw new EnvValidationError([
+      'same-origin service paths need a page origin to resolve against',
+    ]);
+  }
+  // Same-origin paths inherit the page's scheme, so the production checks
+  // below see the transport the trader is actually on.
+  const v = {
+    ...parsed,
+    VITE_GATEWAY_HTTP_URL: resolveHttp(parsed.VITE_GATEWAY_HTTP_URL, origin),
+    VITE_GATEWAY_WS_URL: resolveWs(parsed.VITE_GATEWAY_WS_URL, origin),
+    VITE_CRM_HTTP_URL: resolveHttp(parsed.VITE_CRM_HTTP_URL, origin),
+  };
 
   // Plaintext transport is a development-only affordance. Refusing to boot is
   // the correct failure mode: silently downgrading a real-money session is not.
