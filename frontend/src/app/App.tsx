@@ -1,10 +1,19 @@
-import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
+import {
+  Component,
+  lazy,
+  Suspense,
+  useEffect,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { env } from '@/app/config/env';
 import { BrandProvider } from '@/app/providers/BrandProvider';
 import { ServicesProvider } from '@/app/providers/ServicesProvider';
 import { useServices } from '@/app/providers/services';
 import { TradingTerminalPage } from '@/app/TradingTerminalPage';
+import { isClientAreaPath } from '@/client-area/router';
 import { SignInScreen } from '@/features/auth/SignInScreen';
 import { Button, ErrorState } from '@/components/ui/primitives';
 import { BrandedLoader } from '@/components/ui/BrandedLoader';
@@ -45,12 +54,19 @@ const queryClient = new QueryClient({
   },
 });
 
+const ClientAreaApp = lazy(() =>
+  import('@/client-area/ClientAreaApp').then((m) => ({ default: m.ClientAreaApp })),
+);
+
 export function App() {
   // The server answers every path with this application (SPA fallback), so an
   // address that names no real view rendered the full terminal with a 200 —
-  // no 404 existed anywhere (HGH-03). App state lives in the QUERY STRING;
-  // any other path is by definition not a page.
-  if (window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
+  // no 404 existed anywhere (HGH-03). The terminal keeps its state in the
+  // QUERY STRING at /; the client area owns the paths under /pa; any other
+  // path is by definition not a page.
+  const { pathname } = window.location;
+  const clientArea = isClientAreaPath(pathname);
+  if (!clientArea && pathname !== '/' && pathname !== '/index.html') {
     return <NotFoundScreen />;
   }
   return (
@@ -58,7 +74,13 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <ServicesProvider>
           <BrandProvider>
-            <AuthenticatedApp />
+            <AuthenticatedApp>
+              {clientArea ? (
+                <Suspense fallback={<BrandedLoader label="Opening your personal area…" />}>
+                  <ClientAreaApp />
+                </Suspense>
+              ) : null}
+            </AuthenticatedApp>
           </BrandProvider>
         </ServicesProvider>
       </QueryClientProvider>
@@ -83,8 +105,12 @@ function NotFoundScreen() {
 /**
  * Exported for testing: it owns the gate between "signed in" and the terminal,
  * which is where a premature empty state is most costly.
+ *
+ * With `children`, the signed-in view is theirs (the client area) and the
+ * terminal's account gates below do not apply — the client area has its own
+ * answer to "no accounts yet": Open account.
  */
-export function AuthenticatedApp() {
+export function AuthenticatedApp({ children }: { children?: ReactNode } = {}) {
   const services = useServices();
   const status = useSessionStore((s) => s.status);
   const activeLogin = useSessionStore((s) => s.activeLogin);
@@ -378,7 +404,15 @@ export function AuthenticatedApp() {
         session.setAccounts(accounts);
         session.setAccountsStatus('ready');
 
-        if (
+        // The client area's Trade buttons open the terminal on a chosen
+        // account (/?account=…); that wish outranks the remembered one.
+        const requested = new URLSearchParams(window.location.search).get('account');
+        if (requested !== null && accounts.some((account) => account.login === requested)) {
+          session.setActiveAccount(requested);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('account');
+          window.history.replaceState(window.history.state, '', url);
+        } else if (
           session.activeLogin === null ||
           !accounts.some((account) => account.login === session.activeLogin)
         ) {
@@ -434,6 +468,8 @@ export function AuthenticatedApp() {
   if (status === 'expired') {
     return <SessionExpired />;
   }
+
+  if (children) return <>{children}</>;
 
   // An adopted account snapshot renders the terminal immediately; the gates
   // below apply only when no account could be adopted (first visit on this

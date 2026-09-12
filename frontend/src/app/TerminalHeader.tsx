@@ -9,6 +9,7 @@ import {
   Sun,
   Wifi,
   WifiOff,
+  CircleUser,
 } from 'lucide-react';
 import { cn } from '@/components/ui/cn';
 import { BrandLogo } from '@/components/ui/BrandLogo';
@@ -379,6 +380,16 @@ export function TerminalHeader({ onOpenCommandPalette }: { onOpenCommandPalette:
             {unreadErrors}
           </Badge>
         )}
+
+        {/* The personal area: accounts, deposits, verification, profile. */}
+        <a
+          href="/pa/trading/accounts"
+          aria-label="Personal area"
+          title="Personal area"
+          className="inline-flex h-7 items-center justify-center rounded px-2 text-text-secondary hover:bg-[var(--surface-raised)] hover:text-text-primary max-lg:h-10 max-lg:w-10"
+        >
+          <CircleUser className="h-3.5 w-3.5" aria-hidden />
+        </a>
 
         <Button
           size="xs"

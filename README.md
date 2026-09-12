@@ -73,8 +73,9 @@ exposed to the terminal through the CRM contract (`/crm/...`). Schema
 | table | holds |
 |---|---|
 | `users` | id, email (unique), bcrypt `password_hash`, `enabled`, created/last-login/updated timestamps, and the profile: `name`, `phone`, `country` (ISO-2), `city`, `language` (BCP 47), `timezone` (IANA), `kyc_status` (unverified / pending / verified) |
-| `accounts` | trading `login` (PK), owning `user_id`, `type_id`, currency, balance |
+| `accounts` | trading `login` (PK), owning `user_id`, `type_id`, currency, balance, `kind` (real / demo), trading-password hash |
 | `sessions` | sha256 `token_hash` (PK), `user_id`, `expires_at` — the CRM access token the client holds is never stored in clear |
+| `transactions` | the wallet history: deposits, withdrawals and both legs of transfers (`kind`, `amount`, `method`, `counterpart`) |
 | `broker_accounts` | the demo broker's view of each trading account: settled `balance`, `credit`, `leverage`, `currency` |
 | `broker_positions` | open positions (ticket, login, symbol, side, volume, open price, SL/TP) |
 | `broker_orders` | every order — `working` rows are the pending book, the rest are the trader's order history in final state |
@@ -83,8 +84,10 @@ exposed to the terminal through the CRM contract (`/crm/...`). Schema
 
 - **Sign-up** is self-service on the sign-in screen ("New here? Create a demo
   account"): `POST /client-api/register {email,password,name,phone?,country?,city?,language?,timezone?}`
-  creates the user and one funded demo account (login from `account_login_seq`,
-  starting 100001), then the normal sign-in runs. Passwords: 8–128 characters;
+  creates the user and one **real Standard account, empty** (login from
+  `account_login_seq`, starting 100001) — the client area's Deposit funds it,
+  and demo accounts with 10,000 of virtual money are opened there — then the
+  normal sign-in runs. Passwords: 8–128 characters;
   the profile fields are validated (real IANA zone, ISO-2 country) and default
   to `en` / `UTC`. Duplicate emails → 409.
 - **Sign-in**: `POST /client-api/login` → 30-day session; `POST /client-api/accounts`
@@ -108,6 +111,27 @@ exposed to the terminal through the CRM contract (`/crm/...`). Schema
   (`USERS_DSN`) that holds both the users and the broker's book; without Docker
   the user store runs in memory with the same seed and the book falls back to
   a JSON file.
+
+## Client area (`/pa`)
+
+The personal area a broker's clients manage everything from, served by the
+same SPA at **`/pa/…`** and sharing the terminal's session (`frontend/src/client-area/`,
+CRM routes in `backend/cmd/demomarket/clientarea.go`):
+
+| Page | What it does |
+|---|---|
+| Trading → **Accounts** | Every trading account as a card: platform and type, balance, floating P/L, equity, free margin, leverage, server and login, trading password; Real / Demo tabs; **Open account** (Standard / Pro / Standard Cent, leverage, real or demo); **Trade** opens the terminal on that account (`/?account=…`) |
+| Trading → **Performance** | Closed-trade P/L, win rate, profit factor, cumulative P/L and money in/out from the trading server's deals |
+| Trading → **History of orders** | Filled, cancelled, rejected and expired orders |
+| Payments → **Deposit / Withdrawal / Transfer** | Instant demo money movements through the broker (`POST /client-api/deposit`, `/withdraw`, `/transfer`), recorded in `transactions`; withdrawals and transfers are capped by free margin |
+| Payments → **Transaction history** | `GET /client-api/transactions` |
+| Profile → **Verification** | Three steps — profile (name, phone, country, city), identity document, residential address — each raising the deposit limit (0 → 2,000 → 20,000 → unlimited USD) and unlocking withdrawals at step one. The identity step sits at *pending* for ~20 s (the demo's review), then verifies itself; the admin API can override it |
+| Profile → **Settings** | Profile fields, password change |
+
+Real accounts hold demo money too — nothing on this platform is ever at risk —
+but they open empty and are funded through Deposit, the way a broker's
+onboarding works; demo accounts open with 10,000 of virtual money and can be
+topped up without limits. The terminal keeps showing DEMO for every account.
 
 ## Trading (the demo broker)
 
