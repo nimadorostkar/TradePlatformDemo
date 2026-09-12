@@ -79,8 +79,10 @@ token ends the session early no matter what MaxAge says. Omitted means false.
 
 ### Session restoration (AUTH-001)
 
-`login` additionally stores the session in `HttpOnly; Secure; SameSite=Lax;
-Path=/` cookies (`tradeplatform_session` = the JWT, `tradeplatform_crm` = base64url CRM
+`login` additionally stores the session in `HttpOnly; SameSite=Lax; Path=/`
+cookies — `Secure` as well whenever the request arrived over TLS (directly or
+per the edge's `X-Forwarded-Proto`), so a plain-HTTP deployment keeps a
+restorable session instead of a cookie the browser discards — (`tradeplatform_session` = the JWT, `tradeplatform_crm` = base64url CRM
 token, `tradeplatform_user` = base64url username), with `Max-Age` equal to
 `JWT_EXPIRY`. `GET /session` hands them back to the app after a reload; an
 invalid/expired cookie earns a 401 and the cookies are cleared. The cookies are

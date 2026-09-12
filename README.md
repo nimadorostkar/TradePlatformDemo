@@ -158,10 +158,11 @@ and `/crm/` same-origin — the production layout — in front of the **frontend
 - `gateway.env` (`JWT_SECRET_KEY`, `MANAGER_API_KEY`) and `.env` (`POSTGRES_PASSWORD`,
   `ADMIN_TOKEN`) are generated on the host on first deploy with fresh random values
   and never overwritten; nothing secret leaves your machine.
-- Served over plain HTTP on an IP: the gateway's session-restore cookies are
-  `Secure`-only, so a page reload asks for sign-in again. Put a domain + TLS in
-  front (`PUBLIC_ORIGIN=https://…` switches the terminal to production mode) and
-  that goes away.
+- Served over plain HTTP on an IP, a reload still restores the session: the
+  gateway's session cookies are `Secure` only when the trader's connection is
+  TLS (the edge forwards the scheme). Put a domain + TLS in front
+  (`PUBLIC_ORIGIN=https://…` switches the terminal to production mode) for real
+  use; until then the bearer token and cookies travel in clear alike.
 - Every container restarts with Docker; the stack survives a reboot.
 
 ### CI/CD

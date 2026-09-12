@@ -63,7 +63,7 @@ func (a *API) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	// Leave the session in HttpOnly cookies so a page reload can restore it
 	// through GET /session instead of forcing a fresh sign-in (AUTH-001).
-	a.setSessionCookies(w, token, in.CRMToken, in.Username, in.Remember)
+	a.setSessionCookies(w, r, token, in.CRMToken, in.Username, in.Remember)
 	response.WriteStatus(w, http.StatusOK, tokenResponse{Token: token})
 }
 

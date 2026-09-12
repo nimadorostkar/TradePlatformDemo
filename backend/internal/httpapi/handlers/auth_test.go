@@ -23,7 +23,16 @@ func loginAPI(t *testing.T, crmURL string) *API {
 }
 
 func postLogin(a *API, body string) *httptest.ResponseRecorder {
+	return postLoginOver(a, body, "https")
+}
+
+// postLoginOver signs in as the edge proxy would present the request: with
+// the trader's original scheme in X-Forwarded-Proto.
+func postLoginOver(a *API, body, scheme string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(http.MethodPost, "/api/Authentication/login", strings.NewReader(body))
+	if scheme != "" {
+		r.Header.Set("X-Forwarded-Proto", scheme)
+	}
 	w := httptest.NewRecorder()
 	a.Login(w, r)
 	return w

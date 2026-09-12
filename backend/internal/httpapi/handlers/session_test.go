@@ -42,6 +42,39 @@ func cookieByName(res *http.Response, name string) *http.Cookie {
 	return nil
 }
 
+// A deployment still served over plain HTTP (an IP and a port, before TLS
+// is in front) must not set Secure cookies: the browser discards them and
+// every reload demands the password again. The other attributes stay.
+func TestLogin_OverPlainHTTPSetsRestorableCookies(t *testing.T) {
+	crm := crmStub(t)
+	defer crm.Close()
+	a := sessionAPI(t, crm.URL)
+
+	w := postLoginOver(a, `{"Username":"alice@example.com","CRMToken":"crm-token-value","Remember":true}`, "http")
+	if w.Code != http.StatusOK {
+		t.Fatalf("login status = %d", w.Code)
+	}
+	session := cookieByName(w.Result(), "tradeplatform_session")
+	if session == nil || session.Value == "" {
+		t.Fatal("no tradeplatform_session cookie set at login")
+	}
+	if session.Secure {
+		t.Error("Secure cookie over plain HTTP would be dropped by the browser")
+	}
+	if !session.HttpOnly || session.SameSite != http.SameSiteLaxMode || session.Path != "/" {
+		t.Errorf("session cookie lost its other hardening: %+v", session)
+	}
+
+	// Logout must clear with the same attributes, or the cookie survives.
+	r := httptest.NewRequest(http.MethodPost, "/api/Authentication/logout", nil)
+	r.Header.Set("X-Forwarded-Proto", "http")
+	lw := httptest.NewRecorder()
+	a.Logout(lw, r)
+	if cleared := cookieByName(lw.Result(), "tradeplatform_session"); cleared == nil || cleared.MaxAge != -1 || cleared.Secure {
+		t.Errorf("logout did not clear the plain-HTTP cookie in kind: %+v", cleared)
+	}
+}
+
 func TestLogin_SetsHardenedSessionCookies(t *testing.T) {
 	crm := crmStub(t)
 	defer crm.Close()

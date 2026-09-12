@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/nimadorostkar/TradePlatformDemo/backend/internal/auth"
@@ -19,11 +20,17 @@ import (
 // cannot read, and GET /session hands them back to the app on boot.
 //
 // Scope and threat model:
-//   - HttpOnly + Secure + SameSite=Lax + Path=/. In production the gateway is
-//     reverse-proxied same-origin under /gateway, so these are first-party
-//     cookies. Lax means no cross-site XHR/fetch ever carries them, and the
-//     gateway grants no credentialed CORS — so /session is unreachable from
-//     another origin, and cookie-borne CSRF cannot reach the POST trade routes.
+//   - HttpOnly + SameSite=Lax + Path=/, and Secure whenever the trader's
+//     connection is TLS (directly, or as the edge reports it in
+//     X-Forwarded-Proto). In production the gateway is reverse-proxied
+//     same-origin under /gateway, so these are first-party cookies. Lax means
+//     no cross-site XHR/fetch ever carries them, and the gateway grants no
+//     credentialed CORS — so /session is unreachable from another origin, and
+//     cookie-borne CSRF cannot reach the POST trade routes. A deployment that
+//     is still plain HTTP (an IP and a port) gets non-Secure cookies rather
+//     than none: the browser would otherwise discard them and every reload
+//     would demand the password again, while the bearer token on that same
+//     connection is already travelling in clear.
 //   - The cookies are a RESTORATION channel, not a parallel auth scheme: every
 //     API route still authenticates with the Bearer token; nothing else reads
 //     the cookies.
@@ -66,7 +73,7 @@ type sessionResponse struct {
 // persist=false issues browser-session cookies instead: a 30-day session on a
 // shared machine was never a choice the trader made (MED-02). The remember
 // flag rides in its own cookie so the /session re-mint keeps honouring it.
-func (a *API) setSessionCookies(w http.ResponseWriter, token, crmToken, username string, persist bool) {
+func (a *API) setSessionCookies(w http.ResponseWriter, r *http.Request, token, crmToken, username string, persist bool) {
 	ttl := a.d.SessionTTL
 	if ttl <= 0 {
 		ttl = time.Hour
@@ -77,6 +84,7 @@ func (a *API) setSessionCookies(w http.ResponseWriter, token, crmToken, username
 	if persist {
 		maxAge = int(ttl / time.Second)
 	}
+	secure := requestIsTLS(r)
 	set := func(name, value string) {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
@@ -84,7 +92,7 @@ func (a *API) setSessionCookies(w http.ResponseWriter, token, crmToken, username
 			Path:     "/",
 			MaxAge:   maxAge,
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   secure,
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
@@ -101,7 +109,10 @@ func (a *API) setSessionCookies(w http.ResponseWriter, token, crmToken, username
 }
 
 // clearSessionCookies removes the session cookies (logout, invalid session).
-func (a *API) clearSessionCookies(w http.ResponseWriter) {
+// The Secure attribute must match the one they were set with, or the browser
+// treats the clearing cookie as a different cookie and keeps the original.
+func (a *API) clearSessionCookies(w http.ResponseWriter, r *http.Request) {
+	secure := requestIsTLS(r)
 	for _, name := range []string{sessionCookieName, crmCookieName, userCookieName, persistCookieName} {
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
@@ -109,10 +120,19 @@ func (a *API) clearSessionCookies(w http.ResponseWriter) {
 			Path:     "/",
 			MaxAge:   -1,
 			HttpOnly: true,
-			Secure:   true,
+			Secure:   secure,
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
+}
+
+// requestIsTLS reports whether the trader's connection is HTTPS: terminated
+// here, or at the edge proxy, which forwards the original scheme.
+func requestIsTLS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 // Session → GET /api/Authentication/session.
@@ -165,7 +185,7 @@ func (a *API) Session(w http.ResponseWriter, r *http.Request) {
 		fresh, err := a.d.Login.GenerateTokenWithCRMAccounts(r.Context(), crmToken, username)
 		if err == nil && fresh != "" {
 			// Preserve the original remember-me choice across the re-mint.
-			a.setSessionCookies(w, fresh, crmToken, username, remembered)
+			a.setSessionCookies(w, r, fresh, crmToken, username, remembered)
 			response.WriteStatus(w, http.StatusOK, sessionResponse{
 				Token: fresh, CRMToken: crmToken, Username: username, Remembered: remembered,
 			})
@@ -184,7 +204,7 @@ func (a *API) Session(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	a.clearSessionCookies(w)
+	a.clearSessionCookies(w, r)
 	response.WriteStatus(w, http.StatusUnauthorized, response.Failure("Session expired."))
 }
 
@@ -192,7 +212,7 @@ func (a *API) Session(w http.ResponseWriter, r *http.Request) {
 // in-memory token the client holds simply expires with the tab; this makes
 // sure the next visitor on this browser does not inherit the session.
 func (a *API) Logout(w http.ResponseWriter, r *http.Request) {
-	a.clearSessionCookies(w)
+	a.clearSessionCookies(w, r)
 	response.WriteStatus(w, http.StatusOK, map[string]bool{"loggedOut": true})
 }
 
