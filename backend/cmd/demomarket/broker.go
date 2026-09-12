@@ -1288,6 +1288,22 @@ func (b *demoBroker) UpdateUser(body []byte) string {
 	return fmt.Sprintf(`{"retcode":"0 Done","answer":{"Login":"%d","Leverage":"%d"}}`, login, a.Leverage)
 }
 
+// SetLeverage sets an account's leverage; also what first creates the
+// engine's record for a freshly opened account.
+func (b *demoBroker) SetLeverage(login int64, lev int) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	a, ok := b.acct(login)
+	if !ok {
+		return false
+	}
+	if lev > 0 && lev != a.Leverage {
+		a.Leverage = lev
+		b.dirty = true
+	}
+	return true
+}
+
 // CheckMargin answers /api/trade/check_margin.
 func (b *demoBroker) CheckMargin(login int64, symbol string, typ int, units int64, price float64) string {
 	b.mu.Lock()

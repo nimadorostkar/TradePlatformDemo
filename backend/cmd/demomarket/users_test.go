@@ -37,8 +37,10 @@ func TestRegisterNormalisesAndValidatesProfile(t *testing.T) {
 	if u.Email != "new@example.com" {
 		t.Fatalf("email not normalised: %s", u.Email)
 	}
+	// A sign-up opens one REAL Standard account, empty: the client area's
+	// Deposit funds it, and demo money lives on demo accounts opened there.
 	accounts, _ := s.Accounts(ctx, u.ID)
-	if len(accounts) != 1 || accounts[0].Balance != demoStartBalance {
+	if len(accounts) != 1 || accounts[0].Balance != 0 || accounts[0].Kind != accountKindReal || accounts[0].TypeID != demoAccountType {
 		t.Fatalf("accounts = %+v", accounts)
 	}
 

@@ -117,29 +117,44 @@ func userDTO(u *User) map[string]any {
 		"phone": u.Phone, "country": u.Country, "city": u.City,
 		"language": u.Language, "timezone": u.Timezone,
 		"kycStatus": u.KYCStatus, "createdAt": u.CreatedAt, "updatedAt": u.UpdatedAt,
+		"dateOfBirth": u.DateOfBirth, "address": u.Address, "postalCode": u.PostalCode,
+		"addressStatus": u.AddressStatus, "verificationLevel": verificationLevel(u),
 	}
 }
+
+// contextBackground is the context for work no request is waiting on.
+func contextBackground() context.Context { return context.Background() }
 
 // accountDTO is a trading account with its live figures from the broker.
 func accountDTO(a Account, broker *demoBroker) map[string]any {
 	s := broker.Summary(a.Login)
+	typ, _ := accountTypeByID(a.TypeID)
+	kind := a.Kind
+	if kind == "" {
+		kind = accountKindReal
+	}
 	return map[string]any{
 		"login": strconv.FormatInt(a.Login, 10), "typeId": a.TypeID, "currency": a.Currency,
 		"balance": a.Balance, "equity": s.Equity, "margin": s.Margin, "marginFree": s.MarginFree,
 		"leverage": s.Leverage, "openPositions": s.Positions, "pendingOrders": s.Orders,
-		"createdAt": a.CreatedAt,
+		"createdAt": a.CreatedAt, "kind": kind, "hasTradingPassword": a.HasTradingPassword,
+		"type": map[string]any{"id": a.TypeID, "title": typ.Title, "platform": typ.Platform, "server": "Demo-MT5"},
 	}
 }
 
 // startingBalance is what an account is funded with on a reset: the seeded
-// logins keep their documented amounts, everyone else the sign-up funding.
+// logins keep their documented amounts, a demo account its virtual funding,
+// and a real account starts empty for Deposit to fill.
 func startingBalance(a Account) float64 {
 	for _, seed := range seedAccounts {
 		if seed.Login == a.Login {
 			return seed.Balance
 		}
 	}
-	return demoStartBalance
+	if a.Kind == accountKindDemo {
+		return demoStartBalance
+	}
+	return 0
 }
 
 func main() {
@@ -421,6 +436,9 @@ func main() {
 			logins := make([]int64, 0, len(accounts))
 			for _, a := range accounts {
 				logins = append(logins, a.Login)
+				// The engine must start this login from the CRM's figure, not
+				// from any book a previous holder of the number left behind.
+				broker.Reset(a.Login, a.Balance)
 			}
 			writeJSON(w, http.StatusCreated, map[string]any{"id": u.ID, "email": u.Email, "name": u.Name, "accounts": logins, "user": userDTO(u)})
 		case errors.Is(err, errEmailTaken):
@@ -512,6 +530,9 @@ func main() {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "user store unavailable"})
 		}
 	})
+
+	// ── Client area: accounts, wallet, verification ──────────────────────────
+	(&clientArea{users: users, broker: broker, write: writeJSON, bearer: bearer}).mount(mux)
 
 	// ── Admin (ADMIN_TOKEN): list users, enable/disable ──────────────────────
 	adminOnly := func(next http.HandlerFunc) http.HandlerFunc {

@@ -54,9 +54,18 @@ type User struct {
 	Profile
 	// KYCStatus is the identity-verification state a real CRM would carry:
 	// unverified (fresh sign-up), pending (documents submitted), verified.
-	// Set by the admin API only; the user never grades themselves.
+	// The client area's identity step moves it to pending; the demo's review
+	// (or the admin API) moves it on from there.
 	KYCStatus string
-	UpdatedAt time.Time
+	// Identity step (what the trader submitted) and the residential-address
+	// step, with its own status. See clientarea.go for the levels they unlock.
+	DateOfBirth       string
+	IdentityDocType   string
+	IdentityDocNumber string
+	Address           string
+	PostalCode        string
+	AddressStatus     string // unverified | verified
+	UpdatedAt         time.Time
 }
 
 // Profile is the part of a user record the user may edit themselves.
@@ -121,12 +130,39 @@ func validKYC(status string) bool {
 }
 
 type Account struct {
-	Login     int64
-	UserID    int64
-	TypeID    int
-	Currency  string
-	Balance   float64
-	CreatedAt time.Time
+	Login    int64
+	UserID   int64
+	TypeID   int
+	Currency string
+	Balance  float64
+	// Kind is real or demo in the client area's sense: a real account starts
+	// empty and is funded through Deposit; a demo one opens with virtual
+	// money. Nothing here is real money either way — the whole platform is a
+	// demo — but the two flows differ and traders expect both.
+	Kind               string
+	HasTradingPassword bool
+	CreatedAt          time.Time
+}
+
+const (
+	accountKindReal = "real"
+	accountKindDemo = "demo"
+)
+
+// Transaction is one wallet movement: a deposit into or a withdrawal from a
+// trading account, or one leg of a transfer between two of the user's own.
+type Transaction struct {
+	ID          int64
+	UserID      int64
+	Login       int64
+	Kind        string // deposit | withdrawal | transfer_in | transfer_out
+	Amount      float64
+	Currency    string
+	Method      string
+	Status      string // completed
+	Counterpart int64  // the other account of a transfer, else 0
+	Comment     string
+	CreatedAt   time.Time
 }
 
 // UserStore is what the CRM endpoints need; both backends implement it.
@@ -151,6 +187,19 @@ type UserStore interface {
 	// SetBalance records the balance the demo broker has settled for a
 	// trading account; the CRM's account list reports it.
 	SetBalance(ctx context.Context, login int64, balance float64) error
+	// OpenAccount adds a trading account for the user; the login comes from
+	// the account sequence.
+	OpenAccount(ctx context.Context, userID int64, typeID int, kind, currency string, balance float64) (*Account, error)
+	// SetTradingPassword stores the bcrypt hash of a per-account platform
+	// password (informational in this demo: the terminal signs in by token).
+	SetTradingPassword(ctx context.Context, userID, login int64, password string) error
+	// SubmitIdentity records the identity step and moves KYC to pending.
+	SubmitIdentity(ctx context.Context, userID int64, docType, docNumber, dateOfBirth string) (*User, error)
+	// SubmitAddress records and (in this demo) verifies the residential address.
+	SubmitAddress(ctx context.Context, userID int64, address, city, postalCode, country string) (*User, error)
+	RecordTransaction(ctx context.Context, t Transaction) (*Transaction, error)
+	// Transactions lists the user's wallet movements, newest first.
+	Transactions(ctx context.Context, userID int64, limit int) ([]Transaction, error)
 	Name() string
 }
 
@@ -241,7 +290,30 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS language   TEXT NOT NULL DEFAULT 'en',
   ADD COLUMN IF NOT EXISTS timezone   TEXT NOT NULL DEFAULT 'UTC',
   ADD COLUMN IF NOT EXISTS kyc_status TEXT NOT NULL DEFAULT 'unverified',
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS date_of_birth       TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS identity_doc_type   TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS identity_doc_number TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS address             TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS postal_code         TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS address_status      TEXT NOT NULL DEFAULT 'unverified';
+ALTER TABLE accounts
+  ADD COLUMN IF NOT EXISTS kind                  TEXT NOT NULL DEFAULT 'real',
+  ADD COLUMN IF NOT EXISTS trading_password_hash TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS transactions (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  login        BIGINT NOT NULL,
+  kind         TEXT NOT NULL,
+  amount       NUMERIC(18,2) NOT NULL,
+  currency     TEXT NOT NULL DEFAULT 'USD',
+  method       TEXT NOT NULL DEFAULT '',
+  status       TEXT NOT NULL DEFAULT 'completed',
+  counterpart  BIGINT NOT NULL DEFAULT 0,
+  comment      TEXT NOT NULL DEFAULT '',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS transactions_user_id ON transactions(user_id, id DESC);
 `
 
 func openPGStore(ctx context.Context, dsn string) (*pgStore, error) {
@@ -290,7 +362,7 @@ func (s *pgStore) seed(ctx context.Context) error {
 		return err
 	}
 	for _, a := range seedAccounts {
-		if _, err := tx.Exec(ctx, `INSERT INTO accounts (login, user_id, type_id, currency, balance) VALUES ($1,$2,$3,$4,$5)`, a.Login, id, a.TypeID, a.Currency, a.Balance); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO accounts (login, user_id, type_id, currency, balance, kind) VALUES ($1,$2,$3,$4,$5,'real')`, a.Login, id, a.TypeID, a.Currency, a.Balance); err != nil {
 			return err
 		}
 	}
@@ -311,10 +383,17 @@ func scanUser(row pgx.Row) (*User, error) {
 
 // userColumns and userFields are the one column list and its scan targets;
 // every user query goes through them so a new column is added in one place.
-const userColumns = `id, email, name, enabled, created_at, last_login_at, phone, country, city, language, timezone, kyc_status, updated_at`
+const userColumns = `id, email, name, enabled, created_at, last_login_at, phone, country, city, language, timezone, kyc_status, updated_at, date_of_birth, identity_doc_type, identity_doc_number, address, postal_code, address_status`
 
 func userFields(u *User) []any {
-	return []any{&u.ID, &u.Email, &u.Name, &u.Enabled, &u.CreatedAt, &u.LastLoginAt, &u.Phone, &u.Country, &u.City, &u.Language, &u.Timezone, &u.KYCStatus, &u.UpdatedAt}
+	return []any{&u.ID, &u.Email, &u.Name, &u.Enabled, &u.CreatedAt, &u.LastLoginAt, &u.Phone, &u.Country, &u.City, &u.Language, &u.Timezone, &u.KYCStatus, &u.UpdatedAt,
+		&u.DateOfBirth, &u.IdentityDocType, &u.IdentityDocNumber, &u.Address, &u.PostalCode, &u.AddressStatus}
+}
+
+const accountColumns = `login, user_id, type_id, currency, balance, kind, trading_password_hash <> '', created_at`
+
+func accountFields(a *Account) []any {
+	return []any{&a.Login, &a.UserID, &a.TypeID, &a.Currency, &a.Balance, &a.Kind, &a.HasTradingPassword, &a.CreatedAt}
 }
 
 func qualifiedUserColumns(alias string) string {
@@ -387,9 +466,11 @@ func (s *pgStore) Register(ctx context.Context, email, password string, profile 
 	if err != nil {
 		return nil, err
 	}
-	// Every new user gets one funded demo account.
-	if _, err := tx.Exec(ctx, `INSERT INTO accounts (login, user_id, type_id, currency, balance)
-		VALUES (nextval('account_login_seq'), $1, $2, 'USD', $3)`, u.ID, demoAccountType, demoStartBalance); err != nil {
+	// Every new user gets one real Standard account. It opens empty — the
+	// client area's Deposit funds it — the way a broker's onboarding does;
+	// demo accounts with virtual money are a click away in the same place.
+	if _, err := tx.Exec(ctx, `INSERT INTO accounts (login, user_id, type_id, currency, balance, kind)
+		VALUES (nextval('account_login_seq'), $1, $2, 'USD', 0, 'real')`, u.ID, demoAccountType); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -411,7 +492,7 @@ func (s *pgStore) UserBySession(ctx context.Context, token string) (*User, bool)
 }
 
 func (s *pgStore) Accounts(ctx context.Context, userID int64) ([]Account, error) {
-	rows, err := s.pool.Query(ctx, `SELECT login, user_id, type_id, currency, balance, created_at FROM accounts WHERE user_id = $1 ORDER BY login`, userID)
+	rows, err := s.pool.Query(ctx, `SELECT `+accountColumns+` FROM accounts WHERE user_id = $1 ORDER BY login`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +500,7 @@ func (s *pgStore) Accounts(ctx context.Context, userID int64) ([]Account, error)
 	var out []Account
 	for rows.Next() {
 		var a Account
-		if err := rows.Scan(&a.Login, &a.UserID, &a.TypeID, &a.Currency, &a.Balance, &a.CreatedAt); err != nil {
+		if err := rows.Scan(accountFields(&a)...); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -429,8 +510,7 @@ func (s *pgStore) Accounts(ctx context.Context, userID int64) ([]Account, error)
 
 func (s *pgStore) AccountByLogin(ctx context.Context, login int64) (*Account, bool) {
 	var a Account
-	err := s.pool.QueryRow(ctx, `SELECT login, user_id, type_id, currency, balance, created_at FROM accounts WHERE login = $1`, login).
-		Scan(&a.Login, &a.UserID, &a.TypeID, &a.Currency, &a.Balance, &a.CreatedAt)
+	err := s.pool.QueryRow(ctx, `SELECT `+accountColumns+` FROM accounts WHERE login = $1`, login).Scan(accountFields(&a)...)
 	if err != nil {
 		return nil, false
 	}
@@ -549,6 +629,9 @@ type memStore struct {
 	sessions  map[string]session
 	nextID    int64
 	nextLogin int64
+
+	transactions []Transaction
+	nextTxID     int64
 }
 
 type session struct {
@@ -570,6 +653,7 @@ func newMemStore() *memStore {
 		}
 		for _, a := range seedAccounts {
 			a.UserID = u.ID
+			a.Kind = accountKindReal
 			a.CreatedAt = time.Now()
 			s.accounts[a.Login] = a
 		}
@@ -621,12 +705,12 @@ func (s *memStore) Register(_ context.Context, email, password string, profile P
 		return nil, errEmailTaken
 	}
 	now := time.Now()
-	u := &User{ID: s.nextID, Email: email, Name: p.Name, Enabled: true, CreatedAt: now, Profile: p, KYCStatus: kycUnverified, UpdatedAt: now}
+	u := &User{ID: s.nextID, Email: email, Name: p.Name, Enabled: true, CreatedAt: now, Profile: p, KYCStatus: kycUnverified, AddressStatus: kycUnverified, UpdatedAt: now}
 	s.nextID++
 	s.users[u.ID] = u
 	s.hashes[u.ID] = string(hash)
 	s.byEmail[email] = u.ID
-	s.accounts[s.nextLogin] = Account{Login: s.nextLogin, UserID: u.ID, TypeID: demoAccountType, Currency: "USD", Balance: demoStartBalance, CreatedAt: time.Now()}
+	s.accounts[s.nextLogin] = Account{Login: s.nextLogin, UserID: u.ID, TypeID: demoAccountType, Currency: "USD", Balance: 0, Kind: accountKindReal, CreatedAt: time.Now()}
 	s.nextLogin++
 	copy := *u
 	return &copy, nil
