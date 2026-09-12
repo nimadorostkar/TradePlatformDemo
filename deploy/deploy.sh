@@ -12,6 +12,11 @@
 #      `docker compose up -d --build`;
 #   4. smoke-tests the public origin: /healthz, /gateway/readyz, a mock login.
 #
+# Safe to run from CI and a laptop at the same time: the host side takes a
+# lock, so two deploys serialise instead of racing `docker compose up`, and
+# the first SSH connection is retried for a couple of minutes because a
+# fresh runner occasionally cannot reach the host on the first try.
+#
 # Nothing secret is read from this machine; secrets are generated on the host.
 set -euo pipefail
 
@@ -26,7 +31,16 @@ VERSION="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M
 PUBLIC_WS_ORIGIN="${PUBLIC_ORIGIN/http:\/\//ws://}"; PUBLIC_WS_ORIGIN="${PUBLIC_WS_ORIGIN/https:\/\//wss://}"
 case "$PUBLIC_ORIGIN" in https://*) APP_ENV=production ;; *) APP_ENV=staging ;; esac
 
-ssh_() { ssh -i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$SSH_HOST" "$@"; }
+SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=30)
+ssh_() { ssh "${SSH_OPTS[@]}" "$SSH_HOST" "$@"; }
+LOCK=/run/lock/tradeplatform-deploy.lock
+
+echo "▸ reaching ${SSH_HOST}"
+for attempt in $(seq 1 8); do
+  ssh_ true 2>/dev/null && break
+  [ "$attempt" -lt 8 ] || { echo "cannot reach ${SSH_HOST} over SSH after 8 attempts" >&2; exit 1; }
+  echo "  ssh attempt $attempt failed; retrying in 15s"; sleep 15
+done
 
 echo "▸ building terminal (${APP_ENV}, ${PUBLIC_ORIGIN}, ${VERSION})"
 ( cd "$ROOT/frontend"
@@ -45,11 +59,14 @@ cp -R "$ROOT/frontend/dist" "$BUILD/dist"
 cp "$ROOT/frontend/deploy/nginx.conf" "$ROOT/frontend/deploy/entrypoint.sh" "$ROOT/deploy/frontend/Dockerfile" "$BUILD/"
 
 echo "▸ syncing to ${SSH_HOST}:${REMOTE_DIR}"
-ssh_ "mkdir -p '$REMOTE_DIR'"
-rsync -az --delete -e "ssh -i $SSH_KEY" \
+# Do not rewrite the source tree under a deploy that is still building from
+# it: wait until no other deploy holds the lock (the build step below takes
+# it for real).
+ssh_ "mkdir -p '$REMOTE_DIR' /run/lock && flock -w 900 '$LOCK' true"
+rsync -az --delete -e "ssh ${SSH_OPTS[*]}" \
   --exclude 'frontend.env' --exclude 'gateway.env' --exclude '.env' \
   "$ROOT/deploy/" "$SSH_HOST:$REMOTE_DIR/deploy/"
-rsync -az --delete -e "ssh -i $SSH_KEY" \
+rsync -az --delete -e "ssh ${SSH_OPTS[*]}" \
   --exclude '.git' --exclude 'bin' --exclude 'dist' --exclude '.env' --exclude '.env.*' \
   --exclude '.claude' --exclude 'docs' --exclude '.DS_Store' \
   "$ROOT/backend/" "$SSH_HOST:$REMOTE_DIR/backend/"
@@ -57,6 +74,10 @@ rsync -az --delete -e "ssh -i $SSH_KEY" \
 echo "▸ configuring + starting on host"
 ssh_ bash -s <<REMOTE
 set -euo pipefail
+# One deploy at a time on the host, whoever started it (CI or a laptop):
+# two concurrent \`compose up\` calls collide on container names.
+exec 9>'$LOCK'
+flock -w 900 9 || { echo "another deploy still holds $LOCK after 15 min" >&2; exit 1; }
 cd '$REMOTE_DIR/deploy'
 if [ ! -f .env ]; then
   printf 'POSTGRES_PASSWORD=%s\nADMIN_TOKEN=%s\n' "\$(openssl rand -hex 24)" "\$(openssl rand -hex 24)" > .env
@@ -73,6 +94,9 @@ if [ ! -f gateway.env ]; then
 fi
 sed -e "s|__PUBLIC_ORIGIN__|$PUBLIC_ORIGIN|g" -e "s|__PUBLIC_WS_ORIGIN__|$PUBLIC_WS_ORIGIN|g" \
     -e "s|^APP_ENV=.*|APP_ENV=$APP_ENV|" -e "s|__VERSION__|$VERSION|g" frontend.env.example > frontend.env
+# A deploy interrupted mid-recreate leaves the old container renamed
+# <hash>_tradeplatform-<svc>-1; the next recreate then fails on that name.
+docker ps -aq --filter 'name=^/[0-9a-f]{12}_tradeplatform-' | xargs -r docker rm -f >/dev/null
 EDGE_PORT='$EDGE_PORT' docker compose up -d --build --remove-orphans
 # edge/nginx.conf is bind-mounted: a changed file is not re-read until nginx
 # reloads, so an upstream rename would otherwise 502 until the next restart.

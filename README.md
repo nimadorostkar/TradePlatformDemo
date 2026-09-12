@@ -60,8 +60,9 @@ How it is wired: the browser talks only to the Vite origin, which proxies
 └── Makefile           # root fan-out: setup / dev / build / test / check
 ```
 
-There is no CI/CD in this repository; `make check` is the full verification
-suite and is run locally.
+`make check` is the full verification suite; GitHub Actions runs the same
+checks on every push and pull request and deploys `main` to the server
+(see [CI/CD](#cicd)).
 
 ## Users and accounts
 
@@ -170,7 +171,12 @@ and `/crm/` same-origin — the production layout — in front of the **frontend
 1. **Verify** — legacy-reference guard (`scripts/check-no-legacy-refs.sh`), Go
    fmt/vet/tests, TypeScript typecheck, ESLint, Prettier, Vitest.
 2. **Deploy** (push to `main` only, GitHub environment `production`) — runs
-   `deploy/deploy.sh` against the server over SSH.
+   `deploy/deploy.sh` against the server over SSH. The script retries the
+   first SSH connection for two minutes (runners occasionally cannot reach the
+   host on the first try) and takes a lock on the host, so a deploy from a
+   laptop and one from CI serialise instead of racing `docker compose up`.
+   Deploys are also queued one at a time on the GitHub side and never
+   cancelled mid-flight.
 
 One-time setup with a key that exists **only** for this pipeline (never reuse a
 personal or previous key):
