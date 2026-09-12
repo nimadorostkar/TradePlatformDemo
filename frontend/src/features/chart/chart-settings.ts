@@ -35,6 +35,15 @@ export const INDICATOR_SPECS: Record<IndicatorId, IndicatorSpec> = {
   macd: { label: 'MACD 12/26/9', placement: 'pane', kind: 'macd', fast: 12, slow: 26, signal: 9 },
 };
 
+/** Indicator colours, distinct from the up/down palette so they never read as price. */
+export const INDICATOR_COLORS: Record<IndicatorId, string> = {
+  sma20: '#f5a524',
+  ema50: '#a78bfa',
+  bb20: '#94a3b8',
+  rsi14: '#38bdf8',
+  macd: '#f5a524',
+};
+
 export interface ChartSettings {
   style: ChartStyle;
   indicators: readonly IndicatorId[];

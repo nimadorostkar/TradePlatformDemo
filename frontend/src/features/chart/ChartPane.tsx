@@ -28,11 +28,13 @@ import {
   CHART_STYLES,
   CHART_STYLE_LABELS,
   INDICATORS,
+  INDICATOR_COLORS,
   INDICATOR_SPECS,
   parseChartSettings,
   type ChartStyle,
   type IndicatorId,
 } from './chart-settings';
+import { IndicatorMenu } from './IndicatorMenu';
 import { bollinger, ema, macd, rsi, sma, withLiveBar } from './indicators';
 import { useChartSeries } from './use-chart-series';
 
@@ -67,14 +69,6 @@ const LOAD_EARLIER_THRESHOLD = 30;
 /** Empty bars kept to the right of the live candle. */
 const RIGHT_OFFSET = 4;
 
-/** Indicator colours, distinct from the up/down palette so they never read as price. */
-const INDICATOR_COLORS: Record<IndicatorId, string> = {
-  sma20: '#f5a524',
-  ema50: '#a78bfa',
-  bb20: '#94a3b8',
-  rsi14: '#38bdf8',
-  macd: '#f5a524',
-};
 const MACD_SIGNAL_COLOR = '#a78bfa';
 
 /** The price pane is this many times the height of each indicator pane. */
@@ -789,32 +783,11 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
             ))}
           </div>
           <span aria-hidden className="h-3 w-px bg-[var(--border-default)]" />
-          <div role="group" aria-label="Indicators" className="flex items-center gap-0.5">
-            {INDICATORS.map((id) => {
-              const active = settings.indicators.includes(id);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => toggleIndicator(id)}
-                  className={cn(
-                    'flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium transition-colors',
-                    active
-                      ? 'bg-[var(--surface-raised)] text-[var(--text-primary)]'
-                      : 'text-[var(--text-muted)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]',
-                  )}
-                >
-                  <span
-                    aria-hidden
-                    className="inline-block h-0.5 w-3 rounded"
-                    style={{ backgroundColor: INDICATOR_COLORS[id], opacity: active ? 1 : 0.5 }}
-                  />
-                  {INDICATOR_SPECS[id].label}
-                </button>
-              );
-            })}
-          </div>
+          <IndicatorMenu
+            active={settings.indicators}
+            onToggle={toggleIndicator}
+            onClear={() => setPaneChartState(paneId, { ...settings, indicators: [] })}
+          />
           <span aria-hidden className="h-3 w-px bg-[var(--border-default)]" />
           <div role="group" aria-label="Chart interval" className="flex items-center gap-0.5">
             {INTERVALS.map((option) => (
