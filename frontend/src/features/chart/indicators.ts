@@ -57,3 +57,77 @@ export function withLiveBar(bars: readonly Bar[], live: Bar | null): readonly Ba
   if (live.time === last.time && last !== live) return [...bars.slice(0, -1), live];
   return bars;
 }
+
+/**
+ * Relative Strength Index over `length` bars, Wilder's smoothing: the first
+ * value is a simple average of the first `length` gains and losses, every
+ * later one blends the previous average with the new change at 1/length.
+ * Ranges 0–100; needs `length` changes, so `length + 1` bars.
+ */
+export function rsi(bars: readonly Bar[], length: number): IndicatorPoint[] {
+  if (length < 1 || bars.length <= length) return [];
+  const out: IndicatorPoint[] = [];
+  let gain = 0;
+  let loss = 0;
+  for (let i = 1; i <= length; i++) {
+    const change = bars[i]!.close - bars[i - 1]!.close;
+    if (change > 0) gain += change;
+    else loss -= change;
+  }
+  gain /= length;
+  loss /= length;
+  const value = () => (loss === 0 ? 100 : 100 - 100 / (1 + gain / loss));
+  out.push({ time: bars[length]!.time, value: value() });
+  for (let i = length + 1; i < bars.length; i++) {
+    const change = bars[i]!.close - bars[i - 1]!.close;
+    gain = (gain * (length - 1) + Math.max(change, 0)) / length;
+    loss = (loss * (length - 1) + Math.max(-change, 0)) / length;
+    out.push({ time: bars[i]!.time, value: value() });
+  }
+  return out;
+}
+
+export interface MacdSeries {
+  macd: IndicatorPoint[];
+  signal: IndicatorPoint[];
+  histogram: IndicatorPoint[];
+}
+
+/**
+ * MACD: fast EMA − slow EMA, its EMA as the signal, and their difference as
+ * the histogram. Each series starts where its inputs are all defined, so the
+ * signal and histogram begin `signalLength − 1` bars after the MACD line.
+ */
+export function macd(
+  bars: readonly Bar[],
+  fastLength: number,
+  slowLength: number,
+  signalLength: number,
+): MacdSeries {
+  const empty: MacdSeries = { macd: [], signal: [], histogram: [] };
+  if (fastLength < 1 || slowLength <= fastLength || signalLength < 1) return empty;
+  const fast = ema(bars, fastLength);
+  const slow = ema(bars, slowLength);
+  if (slow.length === 0) return empty;
+  // ema() returns one point per bar from index length-1; align by time.
+  const offset = fast.length - slow.length;
+  const line: IndicatorPoint[] = slow.map((point, i) => ({
+    time: point.time,
+    value: fast[i + offset]!.value - point.value,
+  }));
+  if (line.length < signalLength) return { macd: line, signal: [], histogram: [] };
+  const asBars: Bar[] = line.map((p) => ({
+    time: p.time,
+    open: p.value,
+    high: p.value,
+    low: p.value,
+    close: p.value,
+  }));
+  const signal = ema(asBars, signalLength);
+  const start = line.length - signal.length;
+  const histogram = signal.map((point, i) => ({
+    time: point.time,
+    value: line[i + start]!.value - point.value,
+  }));
+  return { macd: line, signal, histogram };
+}

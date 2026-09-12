@@ -14,15 +14,23 @@ export const CHART_STYLE_LABELS: Record<ChartStyle, string> = {
   area: 'Area',
 };
 
-export const INDICATORS = ['sma20', 'ema50'] as const;
+export const INDICATORS = ['sma20', 'ema50', 'rsi14', 'macd'] as const;
 export type IndicatorId = (typeof INDICATORS)[number];
 
-export const INDICATOR_SPECS: Record<
-  IndicatorId,
-  { label: string; kind: 'sma' | 'ema'; length: number }
-> = {
-  sma20: { label: 'SMA 20', kind: 'sma', length: 20 },
-  ema50: { label: 'EMA 50', kind: 'ema', length: 50 },
+/**
+ * Moving averages draw over the price; oscillators get a pane of their own
+ * under it, in this order.
+ */
+export type IndicatorSpec =
+  | { label: string; placement: 'overlay'; kind: 'sma' | 'ema'; length: number }
+  | { label: string; placement: 'pane'; kind: 'rsi'; length: number }
+  | { label: string; placement: 'pane'; kind: 'macd'; fast: number; slow: number; signal: number };
+
+export const INDICATOR_SPECS: Record<IndicatorId, IndicatorSpec> = {
+  sma20: { label: 'SMA 20', placement: 'overlay', kind: 'sma', length: 20 },
+  ema50: { label: 'EMA 50', placement: 'overlay', kind: 'ema', length: 50 },
+  rsi14: { label: 'RSI 14', placement: 'pane', kind: 'rsi', length: 14 },
+  macd: { label: 'MACD 12/26/9', placement: 'pane', kind: 'macd', fast: 12, slow: 26, signal: 9 },
 };
 
 export interface ChartSettings {

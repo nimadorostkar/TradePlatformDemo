@@ -10,9 +10,11 @@ import {
   LineStyle,
   createChart,
   type IChartApi,
+  type IPaneApi,
   type IPriceLine,
   type ISeriesApi,
   type LogicalRange,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { cn } from '@/components/ui/cn';
@@ -31,7 +33,7 @@ import {
   type ChartStyle,
   type IndicatorId,
 } from './chart-settings';
-import { ema, sma, withLiveBar } from './indicators';
+import { ema, macd, rsi, sma, withLiveBar } from './indicators';
 import { useChartSeries } from './use-chart-series';
 
 /**
@@ -65,11 +67,29 @@ const LOAD_EARLIER_THRESHOLD = 30;
 /** Empty bars kept to the right of the live candle. */
 const RIGHT_OFFSET = 4;
 
-/** Overlay colours, distinct from the up/down palette so they never read as price. */
+/** Indicator colours, distinct from the up/down palette so they never read as price. */
 const INDICATOR_COLORS: Record<IndicatorId, string> = {
   sma20: '#f5a524',
   ema50: '#a78bfa',
+  rsi14: '#38bdf8',
+  macd: '#f5a524',
 };
+const MACD_SIGNAL_COLOR = '#a78bfa';
+
+/** The price pane is this many times the height of each indicator pane. */
+const PRICE_PANE_STRETCH = 3;
+
+type IndicatorSeries = ISeriesApi<'Line'> | ISeriesApi<'Histogram'>;
+interface IndicatorPoint {
+  time: UTCTimestamp;
+  value: number;
+  color?: string;
+}
+/** One drawn indicator: its series by role, and the pane they live in. */
+interface MountedIndicator {
+  series: Map<string, IndicatorSeries>;
+  pane: IPaneApi<Time> | null;
+}
 
 type MainSeries = ISeriesApi<'Candlestick' | 'Bar' | 'Line' | 'Area'>;
 
@@ -143,10 +163,118 @@ function toPoint(style: ChartStyle, bar: Bar) {
     : { time, open: bar.open, high: bar.high, low: bar.low, close: bar.close };
 }
 
-function computeIndicator(id: IndicatorId, bars: readonly Bar[]) {
+/** Every series of an indicator, by role, over the given bars. */
+function computeIndicator(
+  id: IndicatorId,
+  bars: readonly Bar[],
+  colors: Palette,
+): Record<string, IndicatorPoint[]> {
   const spec = INDICATOR_SPECS[id];
-  const points = spec.kind === 'ema' ? ema(bars, spec.length) : sma(bars, spec.length);
-  return points.map((point) => ({ time: point.time as UTCTimestamp, value: point.value }));
+  const pts = (points: { time: number; value: number }[]) =>
+    points.map((point) => ({ time: point.time as UTCTimestamp, value: point.value }));
+  switch (spec.kind) {
+    case 'sma':
+      return { line: pts(sma(bars, spec.length)) };
+    case 'ema':
+      return { line: pts(ema(bars, spec.length)) };
+    case 'rsi':
+      return { line: pts(rsi(bars, spec.length)) };
+    case 'macd': {
+      const m = macd(bars, spec.fast, spec.slow, spec.signal);
+      return {
+        histogram: m.histogram.map((point) => ({
+          time: point.time as UTCTimestamp,
+          value: point.value,
+          color: withAlpha(point.value >= 0 ? colors.up : colors.down, '99'),
+        })),
+        macd: pts(m.macd),
+        signal: pts(m.signal),
+      };
+    }
+    default:
+      return {};
+  }
+}
+
+/** Creates an indicator's series — over the price, or in a fresh pane below it. */
+function mountIndicator(chart: IChartApi, id: IndicatorId): MountedIndicator {
+  const spec = INDICATOR_SPECS[id];
+  const quiet = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+  const series = new Map<string, IndicatorSeries>();
+  if (spec.placement === 'overlay') {
+    series.set(
+      'line',
+      chart.addSeries(LineSeries, { color: INDICATOR_COLORS[id], lineWidth: 1, ...quiet }),
+    );
+    return { series, pane: null };
+  }
+  const pane = chart.addPane();
+  const at = pane.paneIndex();
+  if (spec.kind === 'rsi') {
+    const line = chart.addSeries(
+      LineSeries,
+      {
+        color: INDICATOR_COLORS[id],
+        lineWidth: 1,
+        ...quiet,
+        lastValueVisible: true,
+        // RSI is bounded; a scale that follows the data would hide how far
+        // from the bands it sits.
+        autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+      },
+      at,
+    );
+    for (const level of [70, 30]) {
+      line.createPriceLine({
+        price: level,
+        color: withAlpha(INDICATOR_COLORS[id], '66'),
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: '',
+      });
+    }
+    series.set('line', line);
+  } else {
+    series.set(
+      'histogram',
+      chart.addSeries(
+        HistogramSeries,
+        { ...quiet, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } },
+        at,
+      ),
+    );
+    series.set(
+      'macd',
+      chart.addSeries(
+        LineSeries,
+        { color: INDICATOR_COLORS[id], lineWidth: 1, ...quiet, lastValueVisible: true },
+        at,
+      ),
+    );
+    series.set(
+      'signal',
+      chart.addSeries(LineSeries, { color: MACD_SIGNAL_COLOR, lineWidth: 1, ...quiet }, at),
+    );
+  }
+  return { series, pane };
+}
+
+function applyIndicatorData(mounted: MountedIndicator, data: Record<string, IndicatorPoint[]>) {
+  for (const [role, points] of Object.entries(data)) mounted.series.get(role)?.setData(points);
+}
+
+/** Keep indicator panes in INDICATORS order under the price, at a fixed share of the height. */
+function arrangePanes(chart: IChartApi, mounted: Map<IndicatorId, MountedIndicator>) {
+  let target = 1;
+  for (const id of INDICATORS) {
+    const pane = mounted.get(id)?.pane;
+    if (!pane) continue;
+    if (pane.paneIndex() !== target) pane.moveTo(target);
+    pane.setStretchFactor(1);
+    target++;
+  }
+  chart.panes()[0]?.setStretchFactor(PRICE_PANE_STRETCH);
 }
 
 function formatSigned(value: number, digits: number): string {
@@ -180,7 +308,7 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
   const chartRef = useRef<IChartApi | null>(null);
   const mainRef = useRef<MainSeries | null>(null);
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const overlaysRef = useRef(new Map<IndicatorId, ISeriesApi<'Line'>>());
+  const indicatorsRef = useRef(new Map<IndicatorId, MountedIndicator>());
   const priceLinesRef = useRef<IPriceLine[]>([]);
   const appliedBarsRef = useRef<readonly Bar[] | null>(null);
   // History plus every live bar since, mirroring the hook's own series so the
@@ -289,7 +417,7 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
       chartRef.current = null;
       mainRef.current = null;
       volumeRef.current = null;
-      overlaysRef.current = new Map();
+      indicatorsRef.current = new Map();
       priceLinesRef.current = [];
       appliedBarsRef.current = null;
     };
@@ -323,6 +451,19 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
       rightPriceScale: { borderColor: palette.border },
       timeScale: { borderColor: palette.border },
     });
+    // Per-bar colours (volume, MACD histogram) are baked into the data.
+    const bars = allBarsRef.current;
+    volumeRef.current?.setData(
+      bars.map((bar) => ({
+        time: toSeconds(bar),
+        value: bar.volume ?? 0,
+        color: withAlpha(bar.close >= bar.open ? palette.up : palette.down, '55'),
+      })),
+    );
+    for (const [id, mounted] of indicatorsRef.current) {
+      if (INDICATOR_SPECS[id].kind === 'macd')
+        applyIndicatorData(mounted, computeIndicator(id, bars, palette));
+    }
     const main = mainRef.current;
     if (!main) return;
     switch (main.seriesType()) {
@@ -387,7 +528,9 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
         color: withAlpha(bar.close >= bar.open ? up : down, '55'),
       })),
     );
-    for (const [id, overlay] of overlaysRef.current) overlay.setData(computeIndicator(id, bars));
+    const colors = palette ?? readPalette();
+    for (const [id, mounted] of indicatorsRef.current)
+      applyIndicatorData(mounted, computeIndicator(id, bars, colors));
     appliedBarsRef.current = series.bars;
     if (visible) chart.timeScale().setVisibleRange(visible);
     else if (bars.length > 0) chart.timeScale().scrollToRealTime();
@@ -412,37 +555,43 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
       value: bar.volume ?? 0,
       color: withAlpha(bar.close >= bar.open ? up : down, '55'),
     });
-    for (const [id, overlay] of overlaysRef.current) {
-      const points = computeIndicator(id, allBarsRef.current);
-      const last = points[points.length - 1];
-      if (last && last.time === bar.time) overlay.update(last);
+    const colors = palette ?? readPalette();
+    for (const [id, mounted] of indicatorsRef.current) {
+      for (const [role, points] of Object.entries(
+        computeIndicator(id, allBarsRef.current, colors),
+      )) {
+        const last = points[points.length - 1];
+        if (last && last.time === bar.time) mounted.series.get(role)?.update(last);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [series.lastBar, palette]);
 
-  // Overlays: one line series per enabled indicator, over the merged bars.
+  // Indicators: mounted and dropped as they are toggled, fed the merged bars.
+  // Removing an indicator's last series removes its pane with it.
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
-    const overlays = overlaysRef.current;
-    for (const [id, overlay] of overlays) {
-      if (!settings.indicators.includes(id)) {
-        chart.removeSeries(overlay);
-        overlays.delete(id);
-      }
+    const mounted = indicatorsRef.current;
+    let changed = false;
+    for (const [id, instance] of mounted) {
+      if (settings.indicators.includes(id)) continue;
+      for (const s of instance.series.values()) chart.removeSeries(s);
+      mounted.delete(id);
+      changed = true;
     }
+    const colors = palette ?? readPalette();
     for (const id of settings.indicators) {
-      if (overlays.has(id)) continue;
-      const overlay = chart.addSeries(LineSeries, {
-        color: INDICATOR_COLORS[id],
-        lineWidth: 1,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      });
-      overlay.setData(computeIndicator(id, allBarsRef.current));
-      overlays.set(id, overlay);
+      if (mounted.has(id)) continue;
+      const instance = mountIndicator(chart, id);
+      applyIndicatorData(instance, computeIndicator(id, allBarsRef.current, colors));
+      mounted.set(id, instance);
+      changed = true;
     }
+    if (changed) arrangePanes(chart, mounted);
+    // `palette` only colours the MACD histogram, which the theme effect
+    // repaints on its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.indicators]);
 
   // Page back when the trader scrolls near the oldest bar, and remember
