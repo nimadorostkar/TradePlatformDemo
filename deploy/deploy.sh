@@ -151,7 +151,7 @@ upsert .env EDGE_PORT '$EDGE_PORT'
 upsert gateway.env SESSION_COOKIE_DOMAIN '$COOKIE_DOMAIN'
 # The gateway's WebSocket origin allowlist must name every origin the
 # terminal is served on; entries added by hand (an upcoming domain) are kept.
-merged="$(grep '^CORS_ALLOWED_ORIGINS=' gateway.env | cut -d= -f2-)"
+merged="\$(grep '^CORS_ALLOWED_ORIGINS=' gateway.env | cut -d= -f2-)"
 for o in '$PUBLIC_ORIGIN' '$TERMINAL_ORIGIN' '$CLIENT_AREA_ORIGIN'; do
   [ -n "\$o" ] || continue
   case ",\$merged," in *",\$o,"*) ;; *) merged="\${merged:+\$merged,}\$o" ;; esac
