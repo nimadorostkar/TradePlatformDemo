@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DecimalString } from '@/domain/common/decimal';
 import { asPositionId } from '@/domain/common/ids';
 import type { Position, TradingSymbol } from '@/domain/common/models';
-import { validateCloseVolume } from './ClosePositionDialog';
+import { validateCloseVolume } from './close-volume';
 
 const d = (v: string) => v as DecimalString;
 

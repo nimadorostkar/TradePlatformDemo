@@ -18,24 +18,6 @@ export interface ColumnDefinition {
   required?: boolean;
 }
 
-export function useTableColumns(tableId: string, columns: readonly ColumnDefinition[]) {
-  const hidden = useWorkspace((s) => s.workspace.tables[tableId]?.hiddenColumns);
-
-  const hiddenSet = useMemo(() => new Set(hidden ?? []), [hidden]);
-
-  const visible = useMemo(
-    () => columns.filter((column) => column.required || !hiddenSet.has(column.id)),
-    [columns, hiddenSet],
-  );
-
-  const isVisible = useMemo(
-    () => (id: string) => visible.some((column) => column.id === id),
-    [visible],
-  );
-
-  return { visible, hiddenSet, isVisible };
-}
-
 export function ColumnMenu({
   tableId,
   columns,

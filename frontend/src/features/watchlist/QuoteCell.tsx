@@ -120,7 +120,7 @@ function usePriceFlash(value: string | null): 'up' | 'down' | null {
   return flash;
 }
 
-export function formatPrice(value: string, digits: number): string {
+function formatPrice(value: string, digits: number): string {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return '—';
   return numeric.toFixed(digits);

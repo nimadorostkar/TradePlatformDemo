@@ -1,8 +1,9 @@
 import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { env } from '@/app/config/env';
-import { BrandProvider } from '@/app/providers/brand-provider';
-import { ServicesProvider, useServices } from '@/app/providers/services';
+import { BrandProvider } from '@/app/providers/BrandProvider';
+import { ServicesProvider } from '@/app/providers/ServicesProvider';
+import { useServices } from '@/app/providers/services';
 import { TradingTerminalPage } from '@/app/TradingTerminalPage';
 import { SignInScreen } from '@/features/auth/SignInScreen';
 import { Button, ErrorState } from '@/components/ui/primitives';

@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext } from 'react';
 import { env } from '@/app/config/env';
 import { GatewayHttpClient } from '@/integrations/gateway/api/http-client';
 import { MarketApi } from '@/integrations/gateway/api/market-api';
@@ -52,12 +52,8 @@ export interface Services {
   setReconciler: (reconcile: (reason: string) => void) => void;
 }
 
-const ServicesContext = createContext<Services | null>(null);
-
-export function ServicesProvider({ children }: { children: ReactNode }) {
-  const services = useMemo(() => createServices(), []);
-  return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>;
-}
+/** Provided by <ServicesProvider> (ServicesProvider.tsx); read with useServices. */
+export const ServicesContext = createContext<Services | null>(null);
 
 export function useServices(): Services {
   const services = useContext(ServicesContext);

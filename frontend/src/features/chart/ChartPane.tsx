@@ -447,18 +447,19 @@ export function ChartPane({ paneId, symbol, interval, isPrimary }: ChartPaneProp
 
   // Page back when the trader scrolls near the oldest bar, and remember
   // whether the live edge is in view for the "Latest" control.
+  const { exhausted, loadingEarlier, loadEarlier } = series;
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
     const onRange = (range: LogicalRange | null) => {
       if (!range) return;
       setAtLiveEdge(range.to >= allBarsRef.current.length - 1);
-      if (series.exhausted || series.loadingEarlier) return;
-      if (range.from < LOAD_EARLIER_THRESHOLD) series.loadEarlier();
+      if (exhausted || loadingEarlier) return;
+      if (range.from < LOAD_EARLIER_THRESHOLD) loadEarlier();
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
     return () => chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
-  }, [series.exhausted, series.loadingEarlier, series.loadEarlier]);
+  }, [exhausted, loadingEarlier, loadEarlier]);
 
   // Positions and working orders on this symbol, as price lines.
   useEffect(() => {

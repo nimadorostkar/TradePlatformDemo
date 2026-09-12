@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { env } from '@/app/config/env';
 import {
   applyBrandToDocument,
@@ -6,23 +6,10 @@ import {
   loadBrandConfig,
   type BrandConfig,
 } from '@/app/config/brand';
+import { BrandContext } from '@/app/providers/brand-provider';
 import { useSystemMessages } from '@/stores/system-messages-store';
 
-/**
- * Runtime branding.
- *
- * Fetched once at startup and validated before anything reaches the DOM. A
- * fetch or validation failure falls back to the neutral default and records the
- * reason — an unbranded terminal is a truthful failure, a wrongly-branded one
- * is not.
- */
-
-const BrandContext = createContext<BrandConfig>(DEFAULT_BRAND);
-
-export function useBrand(): BrandConfig {
-  return useContext(BrandContext);
-}
-
+/** Loads the runtime branding once at startup; see brand-provider.ts. */
 export function BrandProvider({ children }: { children: ReactNode }) {
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND);
 
