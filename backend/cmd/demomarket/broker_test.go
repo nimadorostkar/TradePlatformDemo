@@ -24,14 +24,23 @@ func (p *fixedProvider) set(symbol string, bid, ask float64) {
 	p.ticks[symbol] = Tick{Bid: bid, Ask: ask, At: time.Now()}
 }
 
+// pinWeekday keeps FX open for the test whatever day the suite runs on.
+func pinWeekday(t *testing.T) {
+	t.Helper()
+	prev := sessionClock
+	sessionClock = func() time.Time { return time.Date(2026, time.March, 4, 12, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { sessionClock = prev })
+}
+
 func newTestBroker(t *testing.T) (*demoBroker, *fixedProvider, *memStore) {
 	t.Helper()
+	pinWeekday(t)
 	p := &fixedProvider{ticks: map[string]Tick{}}
 	p.set("EURUSD", 1.10000, 1.10010)
 	p.set("USDJPY", 150.000, 150.012)
 	p.set("XAUUSD", 2400.00, 2400.30)
 	users := newMemStore()
-	b := newDemoBroker(p, users, "")
+	b := newDemoBroker(p, users, nil)
 	return b, p, users
 }
 
@@ -311,10 +320,11 @@ func TestCrossCurrencyProfitAndGoldContract(t *testing.T) {
 }
 
 func TestStateFileRoundTrip(t *testing.T) {
+	pinWeekday(t)
 	file := filepath.Join(t.TempDir(), "state", "broker.json")
 	p := &fixedProvider{ticks: map[string]Tick{}}
 	p.set("EURUSD", 1.10000, 1.10010)
-	b := newDemoBroker(p, newMemStore(), file)
+	b := newDemoBroker(p, newMemStore(), fileBrokerStore{path: file})
 	submit(t, b, map[string]any{"Action": "200", "Login": "1010", "Symbol": "EURUSD", "Type": 0, "Volume": 10000})
 	submit(t, b, map[string]any{"Action": "201", "Login": "1010", "Symbol": "EURUSD", "Type": 2, "Volume": 10000, "PriceOrder": 1.09})
 	b.save()
@@ -323,7 +333,7 @@ func TestStateFileRoundTrip(t *testing.T) {
 	}
 
 	users := newMemStore()
-	again := newDemoBroker(p, users, file)
+	again := newDemoBroker(p, users, fileBrokerStore{path: file})
 	if again.PositionCount(1010) != 1 || again.OrderCount(1010) != 1 {
 		t.Fatal("state not restored")
 	}

@@ -65,7 +65,9 @@ services:
     environment:
       USERS_DSN: postgres://tradeplatform:${POSTGRES_PASSWORD}@postgres:5432/tradeplatform?sslmode=disable
       ADMIN_TOKEN: ${ADMIN_TOKEN}
-      # The demo broker's book (positions, orders, history) survives restarts.
+      # The demo broker's book (positions, orders, history, deals) lives in
+      # PostgreSQL alongside the users. The file is only read once, to import a
+      # book left by an earlier file-backed release.
       BROKER_STATE_FILE: /data/broker-state.json
     volumes:
       - brokerdata:/data

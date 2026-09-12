@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -163,17 +161,21 @@ type account struct {
 	Deals     []*deal             `json:"deals"`   // oldest first
 }
 
-// brokerState is what the state file holds.
+// brokerState is the persisted book (see store.go for the backends).
 type brokerState struct {
 	NextTicket  int64              `json:"nextTicket"`
 	NextRequest int64              `json:"nextRequest"`
 	Accounts    map[int64]*account `json:"accounts"`
 }
 
+// sessionClock is the time the engine checks trading sessions against.
+// Tests pin it to a weekday so the book is not closed on weekends.
+var sessionClock = time.Now
+
 type demoBroker struct {
-	provider  Provider
-	users     UserStore
-	stateFile string
+	provider Provider
+	users    UserStore
+	store    BrokerStore // nil: the book lives only in memory
 
 	mu          sync.Mutex
 	accounts    map[int64]*account
@@ -183,9 +185,9 @@ type demoBroker struct {
 	dirty       bool
 }
 
-func newDemoBroker(provider Provider, users UserStore, stateFile string) *demoBroker {
+func newDemoBroker(provider Provider, users UserStore, store BrokerStore) *demoBroker {
 	b := &demoBroker{
-		provider: provider, users: users, stateFile: stateFile,
+		provider: provider, users: users, store: store,
 		accounts: map[int64]*account{}, nextTicket: 600001, nextRequest: 1,
 		results: map[int64]string{},
 	}
@@ -196,21 +198,26 @@ func newDemoBroker(provider Provider, users UserStore, stateFile string) *demoBr
 // ── Persistence ─────────────────────────────────────────────────────────────
 
 func (b *demoBroker) load() {
-	if b.stateFile == "" {
+	if b.store == nil {
 		return
 	}
-	data, err := os.ReadFile(b.stateFile)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	st, err := b.store.Load(ctx)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("broker: cannot read %s: %v", b.stateFile, err)
-		}
+		log.Printf("broker: cannot load the book from %s (%v); starting empty", b.store.Name(), err)
 		return
 	}
-	var st brokerState
-	if err := json.Unmarshal(data, &st); err != nil {
-		log.Printf("broker: %s is not a state file (%v); starting empty", b.stateFile, err)
+	if st == nil {
 		return
 	}
+	b.restore(st)
+	log.Printf("broker: restored %d account(s) from %s", len(st.Accounts), b.store.Name())
+}
+
+// restore adopts a persisted book. Also used to import a state file into an
+// empty database (see importStateFile).
+func (b *demoBroker) restore(st *brokerState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if st.NextTicket > b.nextTicket {
@@ -231,13 +238,13 @@ func (b *demoBroker) load() {
 		// one that settled the trades that moved it.
 		_ = b.users.SetBalance(context.Background(), login, a.Balance)
 	}
-	log.Printf("broker: restored %d account(s) from %s", len(st.Accounts), b.stateFile)
 }
 
-// save writes the state file when something changed. Called from the engine
-// loop, never from a request, so a slow disk never delays a fill.
+// save persists the book when something changed. Called from the engine
+// loop, never from a request, and the write happens outside the lock so a
+// slow disk or database never delays a fill.
 func (b *demoBroker) save() {
-	if b.stateFile == "" {
+	if b.store == nil {
 		return
 	}
 	b.mu.Lock()
@@ -245,23 +252,17 @@ func (b *demoBroker) save() {
 		b.mu.Unlock()
 		return
 	}
-	st := brokerState{NextTicket: b.nextTicket, NextRequest: b.nextRequest, Accounts: b.accounts}
-	data, err := json.MarshalIndent(st, "", " ")
+	st := b.snapshot()
 	b.dirty = false
 	b.mu.Unlock()
-	if err != nil {
-		log.Printf("broker: encode state: %v", err)
-		return
-	}
-	tmp := b.stateFile + ".tmp"
-	if err := os.MkdirAll(filepath.Dir(b.stateFile), 0o755); err == nil {
-		err = os.WriteFile(tmp, data, 0o644)
-	}
-	if err == nil {
-		err = os.Rename(tmp, b.stateFile)
-	}
-	if err != nil {
-		log.Printf("broker: write state: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := b.store.Save(ctx, st); err != nil {
+		log.Printf("broker: save to %s: %v", b.store.Name(), err)
+		// Try again on the next tick rather than losing the change.
+		b.mu.Lock()
+		b.dirty = true
+		b.mu.Unlock()
 	}
 }
 
@@ -559,7 +560,7 @@ func (b *demoBroker) market(symbol string) (*instrument, Tick, string) {
 	if ins == nil {
 		return nil, Tick{}, rcInvalid
 	}
-	if !ins.tradesAt(time.Now().Unix()) {
+	if !ins.tradesAt(sessionClock().Unix()) {
 		return ins, Tick{}, rcMarketClosed
 	}
 	t, ok := b.quote(ins)
@@ -900,7 +901,7 @@ func (b *demoBroker) evaluate() {
 func (b *demoBroker) checkStops(a *account) {
 	for _, p := range sortedPositions(a) {
 		ins := bySymbol[p.Symbol]
-		if ins == nil || !ins.tradesAt(time.Now().Unix()) {
+		if ins == nil || !ins.tradesAt(sessionClock().Unix()) {
 			continue
 		}
 		t, ok := b.quote(ins)
@@ -939,7 +940,7 @@ func (b *demoBroker) checkPending(a *account, now time.Time) {
 			continue
 		}
 		ins := bySymbol[o.Symbol]
-		if ins == nil || !ins.tradesAt(now.Unix()) {
+		if ins == nil || !ins.tradesAt(sessionClock().Unix()) {
 			continue
 		}
 		t, ok := b.quote(ins)

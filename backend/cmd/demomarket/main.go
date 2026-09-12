@@ -166,25 +166,45 @@ func main() {
 	default:
 		log.Fatalf("unknown -source %q (live|synthetic)", *source)
 	}
-	// User management: PostgreSQL when USERS_DSN is set, otherwise in-memory
-	// with the same seed (a laptop without a database still signs in).
+	// User management and the broker's book: PostgreSQL when USERS_DSN is
+	// set, otherwise in-memory users with the same seed and a JSON state file
+	// for the book (a laptop without a database still signs in and trades).
 	var users UserStore
+	var bookStore BrokerStore
+	stateFile := os.Getenv("BROKER_STATE_FILE")
 	if dsn := os.Getenv("USERS_DSN"); dsn != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		pg, err := openPGStore(ctx, dsn)
-		cancel()
 		if err != nil {
+			cancel()
 			log.Fatalf("users: cannot open USERS_DSN: %v", err)
 		}
+		pgBook, err := openPGBrokerStore(ctx, pg.pool)
+		if err != nil {
+			cancel()
+			log.Fatalf("broker: %v", err)
+		}
+		// A database that has never held a book adopts the state file of an
+		// earlier file-backed run, so nobody's history is lost by the switch.
+		if existing, err := pgBook.Load(ctx); err == nil && existing == nil {
+			if _, err := importStateFile(ctx, stateFile, pgBook); err != nil {
+				log.Printf("broker: %v", err)
+			}
+		}
+		cancel()
 		users = pg
+		bookStore = pgBook
 	} else {
 		users = newMemStore()
+		if stateFile != "" {
+			bookStore = fileBrokerStore{path: stateFile}
+		}
 	}
 	adminToken := os.Getenv("ADMIN_TOKEN")
 
-	// The execution engine. BROKER_STATE_FILE keeps positions, orders and
-	// history across restarts; without it the book starts empty each run.
-	broker := newDemoBroker(provider, users, os.Getenv("BROKER_STATE_FILE"))
+	// The execution engine: positions, orders, history and deals survive
+	// restarts through bookStore; without one the book starts empty each run.
+	broker := newDemoBroker(provider, users, bookStore)
 	go broker.Run(context.Background())
 
 	mux := http.NewServeMux()
@@ -589,6 +609,10 @@ func main() {
 		requests.Add(1)
 		mux.ServeHTTP(w, r)
 	})
-	log.Printf("demo market + CRM listening on %s — prices: %s, %d instruments; users: %s; admin API: %v", *addr, provider.Name(), len(instruments), users.Name(), adminToken != "")
+	bookName := "memory only (set USERS_DSN or BROKER_STATE_FILE)"
+	if bookStore != nil {
+		bookName = bookStore.Name()
+	}
+	log.Printf("demo market + CRM listening on %s — prices: %s, %d instruments; users: %s; book: %s; admin API: %v", *addr, provider.Name(), len(instruments), users.Name(), bookName, adminToken != "")
 	log.Fatal(http.ListenAndServe(*addr, logged))
 }

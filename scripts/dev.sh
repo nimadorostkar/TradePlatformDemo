@@ -2,7 +2,8 @@
 # Run the whole platform locally against the in-repo demomarket:
 #
 #   demomarket (real prices + demo broker)   127.0.0.1:5199   (backend/cmd/demomarket;
-#                                             its book persists in .dev-logs/broker-state.json)
+#                                             its book persists in PostgreSQL when Docker
+#                                             is running, else in .dev-logs/broker-state.json)
 #   Go gateway       127.0.0.1:5063   (backend/.env.demo)
 #   web terminal     http://localhost:3100  (Vite; proxies /gateway and /crm)
 #

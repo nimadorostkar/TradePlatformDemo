@@ -74,6 +74,11 @@ exposed to the terminal through the CRM contract (`/crm/...`). Schema
 | `users` | id, email (unique), bcrypt `password_hash`, `enabled`, created/last-login/updated timestamps, and the profile: `name`, `phone`, `country` (ISO-2), `city`, `language` (BCP 47), `timezone` (IANA), `kyc_status` (unverified / pending / verified) |
 | `accounts` | trading `login` (PK), owning `user_id`, `type_id`, currency, balance |
 | `sessions` | sha256 `token_hash` (PK), `user_id`, `expires_at` — the CRM access token the client holds is never stored in clear |
+| `broker_accounts` | the demo broker's view of each trading account: settled `balance`, `credit`, `leverage`, `currency` |
+| `broker_positions` | open positions (ticket, login, symbol, side, volume, open price, SL/TP) |
+| `broker_orders` | every order — `working` rows are the pending book, the rest are the trader's order history in final state |
+| `broker_deals` | every fill, close and balance operation with its realised `profit` — the trading history |
+| `broker_meta` | the ticket and request counters, so nothing is ever reissued after a restart |
 
 - **Sign-up** is self-service on the sign-in screen ("New here? Create a demo
   account"): `POST /client-api/register {email,password,name,phone?,country?,city?,language?,timezone?}`
@@ -99,7 +104,9 @@ exposed to the terminal through the CRM contract (`/crm/...`). Schema
   (accounts 1010, 2020, 3030). The same PostgreSQL also holds the gateway's price
   alerts and saved workspaces (`POSTGRES_DSN`).
 - Locally, `make dev` starts a PostgreSQL container when Docker is running
-  (`USERS_DSN`); without Docker the user store runs in memory with the same seed.
+  (`USERS_DSN`) that holds both the users and the broker's book; without Docker
+  the user store runs in memory with the same seed and the book falls back to
+  a JSON file.
 
 ## Trading (the demo broker)
 
@@ -122,8 +129,16 @@ exactly as they would to a trading server:
 - Every fill books an **order** (history) and a **deal**; rejections come back as
   MT5 retcodes (`10019 No money`, `10016 Invalid stops`, `10015 Invalid price`,
   `10014 Invalid volume`, `10018 Market closed`, …) that the terminal explains.
-- The book persists in `BROKER_STATE_FILE` (`.dev-logs/broker-state.json`
-  under `make dev`, a Docker volume in the compose stack); delete it to reset.
+- The book — positions, working orders, order history, deals, balances and
+  leverage — is written to **PostgreSQL** (the `broker_*` tables above,
+  `backend/cmd/demomarket/store.go`) whenever `USERS_DSN` is set, so a trader's
+  history survives restarts and redeploys and can be queried directly. Saves
+  happen from the engine loop once a second when something changed, never on
+  the request path. Without a database the book falls back to the JSON file in
+  `BROKER_STATE_FILE`; a database that has never held a book imports that file
+  once at start, so switching backends keeps every trader's history. Use the
+  admin reset (or `TRUNCATE broker_deals, broker_orders, broker_positions`) to
+  empty an account's history.
 
 ## Deploying to a server
 
