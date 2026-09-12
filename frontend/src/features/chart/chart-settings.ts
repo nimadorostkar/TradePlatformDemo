@@ -14,7 +14,7 @@ export const CHART_STYLE_LABELS: Record<ChartStyle, string> = {
   area: 'Area',
 };
 
-export const INDICATORS = ['sma20', 'ema50', 'rsi14', 'macd'] as const;
+export const INDICATORS = ['sma20', 'ema50', 'bb20', 'rsi14', 'macd'] as const;
 export type IndicatorId = (typeof INDICATORS)[number];
 
 /**
@@ -23,12 +23,14 @@ export type IndicatorId = (typeof INDICATORS)[number];
  */
 export type IndicatorSpec =
   | { label: string; placement: 'overlay'; kind: 'sma' | 'ema'; length: number }
+  | { label: string; placement: 'overlay'; kind: 'bb'; length: number; mult: number }
   | { label: string; placement: 'pane'; kind: 'rsi'; length: number }
   | { label: string; placement: 'pane'; kind: 'macd'; fast: number; slow: number; signal: number };
 
 export const INDICATOR_SPECS: Record<IndicatorId, IndicatorSpec> = {
   sma20: { label: 'SMA 20', placement: 'overlay', kind: 'sma', length: 20 },
   ema50: { label: 'EMA 50', placement: 'overlay', kind: 'ema', length: 50 },
+  bb20: { label: 'BB 20/2', placement: 'overlay', kind: 'bb', length: 20, mult: 2 },
   rsi14: { label: 'RSI 14', placement: 'pane', kind: 'rsi', length: 14 },
   macd: { label: 'MACD 12/26/9', placement: 'pane', kind: 'macd', fast: 12, slow: 26, signal: 9 },
 };

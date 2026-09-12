@@ -33,7 +33,7 @@ import {
   type ChartStyle,
   type IndicatorId,
 } from './chart-settings';
-import { ema, macd, rsi, sma, withLiveBar } from './indicators';
+import { bollinger, ema, macd, rsi, sma, withLiveBar } from './indicators';
 import { useChartSeries } from './use-chart-series';
 
 /**
@@ -71,6 +71,7 @@ const RIGHT_OFFSET = 4;
 const INDICATOR_COLORS: Record<IndicatorId, string> = {
   sma20: '#f5a524',
   ema50: '#a78bfa',
+  bb20: '#94a3b8',
   rsi14: '#38bdf8',
   macd: '#f5a524',
 };
@@ -177,6 +178,10 @@ function computeIndicator(
       return { line: pts(sma(bars, spec.length)) };
     case 'ema':
       return { line: pts(ema(bars, spec.length)) };
+    case 'bb': {
+      const b = bollinger(bars, spec.length, spec.mult);
+      return { upper: pts(b.upper), middle: pts(b.middle), lower: pts(b.lower) };
+    }
     case 'rsi':
       return { line: pts(rsi(bars, spec.length)) };
     case 'macd': {
@@ -201,6 +206,23 @@ function mountIndicator(chart: IChartApi, id: IndicatorId): MountedIndicator {
   const spec = INDICATOR_SPECS[id];
   const quiet = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
   const series = new Map<string, IndicatorSeries>();
+  if (spec.kind === 'bb') {
+    // Bands solid, the middle dashed: three lines of one colour still read
+    // as one indicator, and the dashed centre is not mistaken for the SMA.
+    const color = INDICATOR_COLORS[id];
+    for (const role of ['upper', 'lower'] as const)
+      series.set(role, chart.addSeries(LineSeries, { color, lineWidth: 1, ...quiet }));
+    series.set(
+      'middle',
+      chart.addSeries(LineSeries, {
+        color: withAlpha(color, 'aa'),
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        ...quiet,
+      }),
+    );
+    return { series, pane: null };
+  }
   if (spec.placement === 'overlay') {
     series.set(
       'line',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bar } from './bars';
-import { ema, macd, rsi, sma, withLiveBar } from './indicators';
+import { bollinger, ema, macd, rsi, sma, withLiveBar } from './indicators';
 
 const bar = (i: number, close: number): Bar => ({
   time: 60 * i,
@@ -107,5 +107,37 @@ describe('macd', () => {
 
   it('rejects nonsensical lengths', () => {
     expect(macd(closes(1, 2, 3), 5, 3, 2).macd).toEqual([]);
+  });
+});
+
+describe('bollinger', () => {
+  it('collapses onto the average when the window is flat', () => {
+    const b = bollinger(closes(5, 5, 5, 5), 3, 2);
+    expect(b.middle.map((p) => p.value)).toEqual([5, 5]);
+    expect(b.upper.map((p) => p.value)).toEqual([5, 5]);
+    expect(b.lower.map((p) => p.value)).toEqual([5, 5]);
+  });
+
+  it('uses the population deviation of the window', () => {
+    // Window 2, 4, 6: mean 4, population σ = √(8/3).
+    const b = bollinger(closes(2, 4, 6), 3, 2);
+    const sigma = Math.sqrt(8 / 3);
+    expect(b.middle[0]).toEqual({ time: 120, value: 4 });
+    expect(b.upper[0]!.value).toBeCloseTo(4 + 2 * sigma, 12);
+    expect(b.lower[0]!.value).toBeCloseTo(4 - 2 * sigma, 12);
+  });
+
+  it('slides the window and stays symmetric about the middle', () => {
+    const b = bollinger(closes(1, 2, 3, 10, 2), 3, 2);
+    expect(b.middle.map((p) => p.time)).toEqual([120, 180, 240]);
+    for (let i = 0; i < b.middle.length; i++) {
+      const mid = b.middle[i]!.value;
+      expect(b.upper[i]!.value - mid).toBeCloseTo(mid - b.lower[i]!.value, 12);
+    }
+    expect(b.middle[1]!.value).toBe(5); // (2 + 3 + 10) / 3
+  });
+
+  it('is empty without enough bars', () => {
+    expect(bollinger(closes(1, 2), 3, 2).middle).toEqual([]);
   });
 });

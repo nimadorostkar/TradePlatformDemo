@@ -131,3 +131,43 @@ export function macd(
   }));
   return { macd: line, signal, histogram };
 }
+
+export interface BollingerSeries {
+  upper: IndicatorPoint[];
+  middle: IndicatorPoint[];
+  lower: IndicatorPoint[];
+}
+
+/**
+ * Bollinger Bands: a simple moving average of closes with bands `mult`
+ * population standard deviations either side (the textbook 20 / 2). The
+ * population deviation — dividing by `length`, not `length − 1` — is what
+ * Bollinger specified and what every charting package draws.
+ */
+export function bollinger(bars: readonly Bar[], length: number, mult: number): BollingerSeries {
+  const empty: BollingerSeries = { upper: [], middle: [], lower: [] };
+  if (length < 1 || mult < 0 || bars.length < length) return empty;
+  const out: BollingerSeries = { upper: [], middle: [], lower: [] };
+  let sum = 0;
+  let sumSq = 0;
+  for (let i = 0; i < bars.length; i++) {
+    const close = bars[i]!.close;
+    sum += close;
+    sumSq += close * close;
+    if (i >= length) {
+      const gone = bars[i - length]!.close;
+      sum -= gone;
+      sumSq -= gone * gone;
+    }
+    if (i < length - 1) continue;
+    const mean = sum / length;
+    // Guard the rounding that can push a flat window's variance below zero.
+    const variance = Math.max(sumSq / length - mean * mean, 0);
+    const width = mult * Math.sqrt(variance);
+    const time = bars[i]!.time;
+    out.middle.push({ time, value: mean });
+    out.upper.push({ time, value: mean + width });
+    out.lower.push({ time, value: mean - width });
+  }
+  return out;
+}
