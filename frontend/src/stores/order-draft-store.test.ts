@@ -190,3 +190,39 @@ describe('a draft that outlives a reload', () => {
     expect(written).toMatchObject({ kind: 'stop', price: '1.16759', symbol: 'EURUSD' });
   });
 });
+
+describe('seeding the volume from the instrument minimum', () => {
+  it('lifts an untouched default to a minimum above it', () => {
+    useOrderDraft.getState().adoptSymbol('BTCUSD');
+    useOrderDraft.getState().seedMinimumVolume('BTCUSD', '0.1');
+    expect(useOrderDraft.getState().volume).toBe('0.1');
+    // And remembers it, so switching away and back does not reseed to 0.01.
+    expect(useOrderDraft.getState().volumeBySymbol.BTCUSD).toBe('0.1');
+  });
+
+  it('leaves the default alone when the minimum is not above it', () => {
+    useOrderDraft.getState().adoptSymbol('EURUSD');
+    useOrderDraft.getState().seedMinimumVolume('EURUSD', '0.01');
+    expect(useOrderDraft.getState().volume).toBe('0.01');
+    expect(useOrderDraft.getState().volumeBySymbol.EURUSD).toBeUndefined();
+  });
+
+  it('never overrides a size the trader chose or a remembered one', () => {
+    useOrderDraft.getState().adoptSymbol('BTCUSD');
+    useOrderDraft.getState().set({ volume: '0.3' });
+    useOrderDraft.getState().seedMinimumVolume('BTCUSD', '0.1');
+    expect(useOrderDraft.getState().volume).toBe('0.3');
+
+    useOrderDraft.getState().resetForSymbol('BTCUSD', 'ETHUSD');
+    useOrderDraft.getState().resetForSymbol('ETHUSD', 'BTCUSD');
+    expect(useOrderDraft.getState().volume).toBe('0.3');
+    useOrderDraft.getState().seedMinimumVolume('BTCUSD', '0.1');
+    expect(useOrderDraft.getState().volume).toBe('0.3');
+  });
+
+  it('ignores a minimum for a symbol other than the one on screen', () => {
+    useOrderDraft.getState().adoptSymbol('EURUSD');
+    useOrderDraft.getState().seedMinimumVolume('BTCUSD', '0.1');
+    expect(useOrderDraft.getState().volume).toBe('0.01');
+  });
+});

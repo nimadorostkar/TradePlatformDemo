@@ -42,6 +42,14 @@ interface OrderDraftState extends OrderDraft {
    * trader actually moving to another instrument.
    */
   adoptSymbol: (symbol: string) => void;
+  /**
+   * Seeds the volume from the instrument's minimum when the trader has not
+   * sized this symbol yet. The store's default is 0.01 lots; an instrument
+   * whose minimum is 0.1 (crypto here, most indices elsewhere) otherwise
+   * opens with the ticket already in error and both buttons disabled.
+   * Anything the trader typed, or a size remembered for the symbol, wins.
+   */
+  seedMinimumVolume: (symbol: string, minimum: string) => void;
   /** The instrument the price fields belong to. Null before the ticket mounts. */
   symbol: string | null;
   /** Volume last used per symbol, so each instrument keeps its own size. */
@@ -188,6 +196,15 @@ export const useOrderDraft = create<OrderDraftState>()((set, get) => ({
         appliedFrom: null,
         side: null,
       };
+    }),
+
+  seedMinimumVolume: (symbol, minimum) =>
+    set((state) => {
+      if (state.symbol !== symbol || state.volumeBySymbol[symbol] !== undefined) return {};
+      if (state.volume !== INITIAL.volume) return {};
+      const min = Number(minimum);
+      if (!Number.isFinite(min) || min <= Number(INITIAL.volume)) return {};
+      return { volume: minimum, volumeBySymbol: { ...state.volumeBySymbol, [symbol]: minimum } };
     }),
 
   applyFrom: (source, patch) => set({ ...patch, appliedFrom: source }),

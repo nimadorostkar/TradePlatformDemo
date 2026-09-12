@@ -88,6 +88,7 @@ export default function OrderTicketWidget() {
   const setDraft = useOrderDraft((s) => s.set);
   const resetDraftForSymbol = useOrderDraft((s) => s.resetForSymbol);
   const adoptSymbol = useOrderDraft((s) => s.adoptSymbol);
+  const seedMinimumVolume = useOrderDraft((s) => s.seedMinimumVolume);
   const acknowledgeApplied = useOrderDraft((s) => s.acknowledgeApplied);
 
   const setKind = useCallback((next: OrderKind) => setDraft({ kind: next }), [setDraft]);
@@ -145,6 +146,12 @@ export default function OrderTicketWidget() {
     acceptedRef.current = null;
     setConfirmation('awaiting');
   }, [displaySymbol, resetDraftForSymbol, adoptSymbol]);
+
+  // An instrument whose minimum is above the default size starts at its
+  // minimum instead of in error (a size the trader chose is left alone).
+  useEffect(() => {
+    if (symbol?.volumeMin) seedMinimumVolume(displaySymbol, symbol.volumeMin);
+  }, [displaySymbol, symbol?.volumeMin, seedMinimumVolume]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
