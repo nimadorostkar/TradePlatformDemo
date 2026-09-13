@@ -319,6 +319,19 @@ describe('GatewaySubscriptionPool', () => {
  * because it comes from the ORDERING of the stale and stability windows.
  */
 describe('GatewaySubscriptionPool retry budget (production defaults)', () => {
+  // The backoff carries random jitter. These scenarios step fake time in
+  // fixed strides, so a replacement socket scheduled at the top of the
+  // jitter range can land just past a stride and be missed by openLatest —
+  // one lost cycle in ~15 runs read as an exhausted budget. Pin the jitter
+  // to its floor: the defect under test is the window ORDERING, not the
+  // spread of the delay.
+  beforeEach(() => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const openLatest = () => {
     const socket = FakeSocket.instances.at(-1);
     if (socket && socket.readyState === 0) socket.open();
