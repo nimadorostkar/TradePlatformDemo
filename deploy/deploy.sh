@@ -179,7 +179,9 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: applicat
 # The WebSocket stream must accept every origin the terminal is served on:
 # a browser on a subdomain missing from the gateway's allowlist gets a 403
 # on /ws and a terminal that never streams. Probed with the documented demo
-# sign-in; 101 is the upgrade, anything else is a misconfiguration.
+# sign-in; 101 is the upgrade, anything else is a misconfiguration. HTTP/1.1
+# explicitly: a WebSocket upgrade has no HTTP/2 form, and curl would pick h2
+# through a TLS proxy (Caddy answers 426).
 crm=$(curl -s -X POST -H 'Content-Type: application/json' "$PUBLIC_ORIGIN/gateway/api/Authentication/crmlogin" \
   -d '{"email":"trader@example.com","password":"correct-password"}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 jwt=$(curl -s -X POST -H 'Content-Type: application/json' "$PUBLIC_ORIGIN/gateway/api/Authentication/login" \
@@ -188,7 +190,7 @@ ws_probe() { # $1 origin, $2 host to resolve (empty: as-is)
   local origin="$1" host="$2" port resolve=()
   port="${origin##*:}"; case "$origin" in *://*:*) ;; https://*) port=443 ;; *) port=80 ;; esac
   [ -n "$host" ] && resolve=(--resolve "${host}:${port}:${HOST_IP}")
-  curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${resolve[@]}" \
+  curl -s -o /dev/null -w '%{http_code}' --http1.1 --max-time 5 "${resolve[@]}" \
     -H "Origin: $origin" -H "Authorization: Bearer $jwt" \
     -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
     -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Protocol: tradeplatform.v1' \
