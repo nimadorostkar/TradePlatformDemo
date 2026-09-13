@@ -1,0 +1,34 @@
+# TLS termination for the public xfiv.com names — a snippet for the Caddy that
+# already owns ports 80/443 on the host (the `financebot` compose project,
+# /root/financebot/Caddyfile). Caddy obtains and renews the Let's Encrypt
+# certificates itself; the TradePlatform edge listens on host port 8080 and
+# routes by host name (deploy/edge/templates/hosts.conf.template).
+#
+#   xfiv.com           → empty page
+#   trade.xfiv.com     → trading terminal
+#   client.xfiv.com    → client area (personal area)
+#
+# 172.18.0.1 is the host as seen from Caddy's Docker network. Caddy passes
+# the original Host header through and sets X-Forwarded-Proto: https, which
+# the edge forwards to the gateway so its session cookies come out Secure
+# with Domain=xfiv.com (one sign-in across both subdomains).
+
+xfiv.com {
+    header -Server
+    respond "" 200
+}
+
+trade.xfiv.com, client.xfiv.com {
+    encode gzip zstd
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        -Server
+    }
+    reverse_proxy 172.18.0.1:8080 {
+        # long-lived WebSocket streams to the gateway
+        transport http {
+            read_timeout 0
+            write_timeout 0
+        }
+    }
+}

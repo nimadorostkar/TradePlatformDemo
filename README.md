@@ -221,10 +221,17 @@ signing in on one subdomain signs you in on the other.
 name through the edge. Cross-links follow: **Trade** in the client area opens
 `trade.…/?account=…`, the terminal's person icon opens `my.…/trading/accounts`.
 Until DNS exists, `*.nip.io` names (`my.203.0.113.10.nip.io`) resolve to the
-IP with no setup and exercise the whole path. TLS: put a certificate-terminating
-proxy (Caddy, Traefik, a cloud load balancer) in front of the edge on 443 with
-`X-Forwarded-Proto: https`, set `PUBLIC_ORIGIN=https://…`, and the terminal
-switches to production mode and Secure cookies on its own.
+IP with no setup and exercise the whole path.
+
+**TLS.** A certificate-terminating proxy in front of the edge does it: the
+production host runs Caddy (from the `financebot` compose project, owning
+80/443), configured with [`deploy/caddy/xfiv.Caddyfile`](deploy/caddy/xfiv.Caddyfile)
+— `xfiv.com` empty, `trade.xfiv.com` and `client.xfiv.com` proxied to the edge
+on 8080 with automatic Let's Encrypt certificates. The edge forwards Caddy's
+`X-Forwarded-Proto: https` to the gateway, so with `PUBLIC_ORIGIN=https://…`
+the terminal runs in production mode and the session cookies are `Secure`
+with `Domain=xfiv.com`. The bare `http://<ip>:8080` stays reachable for
+operators but the terminal refuses plaintext in production mode there.
 
 ### CI/CD
 
