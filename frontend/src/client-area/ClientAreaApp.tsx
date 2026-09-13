@@ -28,7 +28,7 @@ import { LoadingState } from '@/components/ui/primitives';
 import { useBrand } from '@/app/providers/brand-provider';
 import { useServices } from '@/app/providers/services';
 import { useSessionStore } from '@/stores/session-store';
-import { useWorkspace } from '@/workspace/layout/workspace-store';
+import { applyClientAreaTheme, useClientAreaTheme } from './theme';
 import {
   ROUTES,
   navigate,
@@ -120,7 +120,7 @@ const NAV: {
 export function ClientAreaApp() {
   const pathname = usePathname();
   const route = resolveRoute(pathname);
-  const theme = useWorkspace((s) => s.workspace.theme);
+  const [theme] = useClientAreaTheme();
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem('pa.sidebar') === 'collapsed';
@@ -130,15 +130,9 @@ export function ClientAreaApp() {
   });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // The same theme rule as the terminal, so the two halves never disagree.
+  // The client area's own theme, light by default (see theme.ts).
   useEffect(() => {
-    const resolved =
-      theme === 'system'
-        ? typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: light)').matches
-          ? 'light'
-          : 'dark'
-        : theme;
-    document.documentElement.dataset.theme = resolved;
+    applyClientAreaTheme(theme);
   }, [theme]);
 
   // /pa itself is not a page; land on Accounts without leaving a dead entry
@@ -203,8 +197,7 @@ export function ClientAreaApp() {
 function TopBar({ onMenu }: { onMenu: () => void }) {
   const brand = useBrand();
   const services = useServices();
-  const theme = useWorkspace((s) => s.workspace.theme);
-  const setTheme = useWorkspace((s) => s.setTheme);
+  const [theme, setTheme] = useClientAreaTheme();
   const [logoFailed, setLogoFailed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const me = useMe();

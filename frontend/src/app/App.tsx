@@ -3,6 +3,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useLayoutEffect,
   useState,
   type ErrorInfo,
   type ReactNode,
@@ -14,6 +15,7 @@ import { ServicesProvider } from '@/app/providers/ServicesProvider';
 import { useServices } from '@/app/providers/services';
 import { TradingTerminalPage } from '@/app/TradingTerminalPage';
 import { placementFor } from '@/app/surfaces';
+import { applyClientAreaTheme } from '@/client-area/theme';
 import { SignInScreen } from '@/features/auth/SignInScreen';
 import { Button, ErrorState } from '@/components/ui/primitives';
 import { BrandedLoader } from '@/components/ui/BrandedLoader';
@@ -65,6 +67,12 @@ export function App() {
   // depends on the host as well (app/surfaces.ts): the client area may own
   // a whole subdomain or just /pa. Anything else is by definition not a page.
   const placement = placementFor(window.location.pathname);
+  const clientArea = placement.surface === 'client-area';
+  // The client area is light by default and keeps its own preference; paint
+  // it before anything renders so even the sign-in screen is on-theme there.
+  useLayoutEffect(() => {
+    if (clientArea) applyClientAreaTheme();
+  }, [clientArea]);
   if (placement.redirectTo) {
     window.location.replace(placement.redirectTo);
     return null;
@@ -72,7 +80,6 @@ export function App() {
   if (placement.surface === 'not-found') {
     return <NotFoundScreen />;
   }
-  const clientArea = placement.surface === 'client-area';
   return (
     <RootErrorBoundary>
       <QueryClientProvider client={queryClient}>
